@@ -5,6 +5,8 @@ from app.routes.evidence import router as evidence_router
 from app.routes.profiles import router as profiles_router
 from app.routes.sessions import router as sessions_router
 from app.routes.vehicles import router as vehicles_router
+from app.routes.voice import router as voice_router
+from app.voice.webrtc import close_voice_webrtc, router as voice_webrtc_router
 
 app = FastAPI(title="Cars24 Jockey Copilot API")
 
@@ -19,3 +21,6 @@ app.include_router(profiles_router)
 app.include_router(sessions_router)
 app.include_router(ai_router)
 app.include_router(evidence_router)
+app.include_router(voice_router)
+app.include_router(voice_webrtc_router)
+app.add_event_handler("shutdown", close_voice_webrtc)

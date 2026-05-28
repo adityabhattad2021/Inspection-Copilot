@@ -59,15 +59,7 @@ LIVE_FRAME_RESPONSES: dict[str, dict[str, Any]] = {
 
 
 def analyze_live_frame(sample_key: str, expected_parts: list[str]) -> dict[str, Any]:
-    fallback = {
-        "confidence": 0.74,
-        "guidance": "Hold the phone steady and include the full requested area.",
-        "problems": ["sample frame not recognized"],
-        "readyToCapture": False,
-        "status": "adjust",
-        "visibleParts": expected_parts[:1],
-    }
-    return LIVE_FRAME_RESPONSES.get(sample_key, fallback)
+    return LIVE_FRAME_RESPONSES[sample_key]
 
 
 def structure_observation(transcript: str) -> dict[str, Any]:

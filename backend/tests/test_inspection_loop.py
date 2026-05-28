@@ -95,6 +95,23 @@ def test_live_frame_analysis_returns_guidance_and_records_intervention():
     )
 
 
+def test_live_frame_analysis_rejects_unrecognized_frame_without_fallback():
+    session_id = _create_session()
+    client.post(f"/sessions/{session_id}/start", json={})
+
+    response = client.post(
+        "/ai/analyze-live-frame",
+        json={
+            "sessionId": session_id,
+            "stepId": "front-main",
+            "sampleKey": "unknown-frame",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Unrecognized live frame input"
+
+
 def test_photo_evidence_accepts_step_and_advances_to_lhs_door():
     session_id = _create_session()
     client.post(f"/sessions/{session_id}/start", json={})

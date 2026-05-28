@@ -33,7 +33,7 @@ export function ObservationCard({
           Is this a scratch, dent, rust, or dirt?
         </Text>
         <Text selectable style={[typography.subtitle, { color: colors.textOnDark }]}>
-          Demo transcript: {transcript}
+          Heard: {transcript}
         </Text>
       </View>
       <Button

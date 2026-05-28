@@ -13,6 +13,10 @@ export function getInspectionErrorMessage(error: unknown) {
     return error.message;
   }
 
+  if (error instanceof Error) {
+    return error.message;
+  }
+
   return "Unable to load this inspection session.";
 }
 

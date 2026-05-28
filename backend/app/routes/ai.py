@@ -107,7 +107,13 @@ def analyze_live_frame_endpoint(
 ) -> LiveFrameAnalysisResponse:
     session = _load_session(request.session_id)
     step = _session_step(session, request.step_id)
-    result = analyze_live_frame(request.sample_key, step.expected_parts)
+    try:
+        result = analyze_live_frame(request.sample_key, step.expected_parts)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="Unrecognized live frame input",
+        ) from exc
     now = _utc_now()
     intervention_type = (
         "live_frame_hold" if result["readyToCapture"] else "live_frame_adjust"

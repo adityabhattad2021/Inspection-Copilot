@@ -4,7 +4,6 @@ import type {
   PipecatClientOptions,
   RTVIMessage,
   TranscriptData,
-  TransportState,
 } from "@pipecat-ai/client-js";
 
 export type InspectionVoiceEvent =
@@ -17,24 +16,43 @@ export type InspectionVoiceEvent =
       type: "user-transcript";
     };
 
+export type InspectionVoiceConnectRequest = {
+  sessionId: string;
+  startUrl: string;
+  jockeyName?: string;
+  languageCode?: string;
+};
+
 export type InspectionVoiceDriver = {
-  connect: (sessionId: string) => Promise<void>;
+  connect: (request: InspectionVoiceConnectRequest) => Promise<void>;
   disconnect: () => Promise<void>;
   sendAgentMessage: (text: string) => Promise<void>;
 };
 
-type VoiceDriverOptions = {
-  endpoint: string;
-  onEvent: (event: InspectionVoiceEvent) => void;
-};
-
 export const PIPECAT_VOICE_BOUNDARY = {
-  fallback: "deterministic-inspection-ui",
   provider: "pipecat",
-  transport: "small-webrtc-first-daily-later",
+  transport: "small-webrtc",
 } as const;
 
-const PIPECAT_START_ENDPOINT = process.env.EXPO_PUBLIC_PIPECAT_START_URL;
+type SmallWebRTCTransportInternals = {
+  _handleTrackStarted?: (event: unknown) => Promise<void> | void;
+  pc?: unknown;
+};
+
+function buildStartRequestBody(request: InspectionVoiceConnectRequest) {
+  const body: Record<string, string> = {
+    sessionId: request.sessionId,
+  };
+
+  if (request.jockeyName) {
+    body.jockeyName = request.jockeyName;
+  }
+  if (request.languageCode) {
+    body.languageCode = request.languageCode;
+  }
+
+  return body;
+}
 
 function messageToText(message: RTVIMessage) {
   const data = message.data;
@@ -51,46 +69,44 @@ function messageToText(message: RTVIMessage) {
   return "Pipecat voice transport error.";
 }
 
-export function createInspectionVoiceDriver(
-  onEvent: (event: InspectionVoiceEvent) => void,
-): InspectionVoiceDriver {
-  if (!PIPECAT_START_ENDPOINT) {
-    return createDemoInspectionVoiceDriver(onEvent);
+function guardTrackEventsUntilPeerConnectionExists(
+  nativeTransportSource: unknown,
+  mediaManagerSource: unknown,
+) {
+  const nativeTransport =
+    nativeTransportSource as SmallWebRTCTransportInternals;
+  const mediaManager = mediaManagerSource as {
+    onTrackStarted?: (event: unknown) => void;
+  };
+  const handleTrackStarted =
+    nativeTransport._handleTrackStarted?.bind(nativeTransport);
+
+  if (!handleTrackStarted) {
+    return;
   }
 
-  return createNativePipecatVoiceDriver({
-    endpoint: PIPECAT_START_ENDPOINT,
-    onEvent,
-  });
-}
-
-export function createDemoInspectionVoiceDriver(
-  onEvent: (event: InspectionVoiceEvent) => void,
-): InspectionVoiceDriver {
-  return {
-    async connect(sessionId: string) {
-      onEvent({
-        text: `Pipecat voice session ready for ${sessionId}.`,
-        type: "agent-message",
-      });
-    },
-    async disconnect() {
+  mediaManager.onTrackStarted = async (event: unknown) => {
+    if (!nativeTransport.pc) {
       return;
-    },
-    async sendAgentMessage(text: string) {
-      onEvent({ text, type: "agent-message" });
-    },
+    }
+
+    await handleTrackStarted(event);
   };
 }
 
-function createNativePipecatVoiceDriver({
-  endpoint,
-  onEvent,
-}: VoiceDriverOptions): InspectionVoiceDriver {
+export function createInspectionVoiceDriver(
+  onEvent: (event: InspectionVoiceEvent) => void,
+): InspectionVoiceDriver {
+  return createNativePipecatVoiceDriver(onEvent);
+}
+
+function createNativePipecatVoiceDriver(
+  onEvent: (event: InspectionVoiceEvent) => void,
+): InspectionVoiceDriver {
   let client: PipecatClientInstance | null = null;
 
   return {
-    async connect(sessionId: string) {
+    async connect(request: InspectionVoiceConnectRequest) {
       const [
         { PipecatClient },
         { DailyMediaManager },
@@ -101,9 +117,13 @@ function createNativePipecatVoiceDriver({
         import("@pipecat-ai/react-native-small-webrtc-transport"),
       ]);
 
-      const transport = new RNSmallWebRTCTransport({
-        mediaManager: new DailyMediaManager(),
-      }) as unknown as PipecatClientOptions["transport"];
+      const mediaManager = new DailyMediaManager();
+      const nativeTransport = new RNSmallWebRTCTransport({
+        mediaManager,
+      });
+      guardTrackEventsUntilPeerConnectionExists(nativeTransport, mediaManager);
+      const transport =
+        nativeTransport as unknown as PipecatClientOptions["transport"];
 
       client = new PipecatClient({
         callbacks: {
@@ -112,22 +132,8 @@ function createNativePipecatVoiceDriver({
               onEvent({ text: data.text, type: "agent-message" });
             }
           },
-          onBotReady: () => {
-            onEvent({
-              text: "Voice copilot is listening.",
-              type: "agent-message",
-            });
-          },
           onError: (message: RTVIMessage) => {
             onEvent({ text: messageToText(message), type: "agent-message" });
-          },
-          onTransportStateChanged: (state: TransportState) => {
-            if (state === "connecting" || state === "ready") {
-              onEvent({
-                text: `Voice transport ${state}.`,
-                type: "agent-message",
-              });
-            }
           },
           onUserTranscript: (data: TranscriptData) => {
             if (data.final && data.text) {
@@ -141,9 +147,9 @@ function createNativePipecatVoiceDriver({
       });
 
       await client.startBotAndConnect({
-        endpoint,
+        endpoint: request.startUrl,
         requestData: {
-          sessionId,
+          body: buildStartRequestBody(request),
         },
       });
     },
@@ -152,9 +158,13 @@ function createNativePipecatVoiceDriver({
       client = null;
     },
     async sendAgentMessage(text: string) {
-      await client?.sendText(text, {
-        audio_response: false,
-        run_immediately: false,
+      if (!client) {
+        throw new Error("Realtime voice client is not connected.");
+      }
+
+      await client.sendText(`SYSTEM_GUIDANCE: ${text}`, {
+        audio_response: true,
+        run_immediately: true,
       });
     },
   };

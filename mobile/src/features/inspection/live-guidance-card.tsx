@@ -9,13 +9,13 @@ import {
   spacing,
   typography,
 } from "@/src/components/ui";
-import type { SampleFrame } from "@/src/data/sample-media";
+import type { InspectionFrame } from "@/src/data/live-inspection-media";
 
-type SampleGuidanceCardProps = {
+type LiveGuidanceCardProps = {
   analysis: LiveFrameAnalysis | null;
   captureFlash: Animated.Value;
   expectedParts: readonly string[];
-  frame: SampleFrame;
+  frame: InspectionFrame;
   isBusy: boolean;
   onAnalyze: () => void;
   onUseNextFrame: () => void;
@@ -38,9 +38,9 @@ const toneStyles = {
     backgroundColor: "#F5F6EE",
     borderColor: "rgba(199, 61, 61, 0.34)",
   },
-} satisfies Record<SampleFrame["tone"], { backgroundColor: string; borderColor: string }>;
+} satisfies Record<InspectionFrame["tone"], { backgroundColor: string; borderColor: string }>;
 
-export function SampleGuidanceCard({
+export function LiveGuidanceCard({
   analysis,
   captureFlash,
   expectedParts,
@@ -48,7 +48,7 @@ export function SampleGuidanceCard({
   isBusy,
   onAnalyze,
   onUseNextFrame,
-}: SampleGuidanceCardProps) {
+}: LiveGuidanceCardProps) {
   const isDark = frame.tone === "dark";
   const frameColor = isDark ? colors.textOnDark : colors.text;
   const canApplyGuidance = analysis?.status === "adjust";
@@ -96,7 +96,7 @@ export function SampleGuidanceCard({
               { color: isDark ? colors.ai : colors.textMuted },
             ]}
           >
-            Sample frame
+            Live camera frame
           </Text>
           <Text
             adjustsFontSizeToFit
@@ -220,7 +220,7 @@ export function SampleGuidanceCard({
               numberOfLines={1}
               style={[typography.label, { color: colors.textOnDark }]}
             >
-              Apply guidance
+              Adjust view
             </Text>
           </Pressable>
         ) : null}

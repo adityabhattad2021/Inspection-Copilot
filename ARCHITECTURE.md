@@ -557,6 +557,8 @@ flowchart LR
 | `POST /ai/structure-observation` | `sessionId`, `stepId`, `transcript` | `fieldId`, `issue`, `severity`, `confidence` |
 | `POST /ai/engine-check` | `sessionId`, `stepId`, `phase`, `jockeyAnswers[]` | `nextInstruction`, `questions[]`, `structuredFields[]`, `confidence` |
 | `POST /ai/audio-evidence-qa` | `sessionId`, `audioUrl`, `localMetrics` | `accepted`, `qualityScore`, `evidenceNote` |
+| `GET /voice/config` | none | `provider`, `transport`, `startUrl`, `model`, `voice`, `ready`, `missing[]` |
+| `POST /voice/transcript-turn` | `sessionId`, `stepId`, `transcript` | `type`, `message`, `structuredFields`, `nextStep`, `session` |
 | `POST /sessions/{id}/complete` | `sessionId` | `status`, `reportUrl`, `dashboardUrl`, `emailStatus` |
 
 ## AI Contract Flow

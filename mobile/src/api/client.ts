@@ -129,6 +129,16 @@ export type CompleteInspectionSessionResponse = {
   agentMessage: string;
 };
 
+export type VoiceRuntimeConfig = {
+  provider: "pipecat";
+  transport: "small-webrtc";
+  startUrl: string;
+  model: string;
+  voice: string;
+  ready: boolean;
+  missing: string[];
+};
+
 async function requestJson<TResponse>(
   path: string,
   options?: RequestInit,
@@ -226,6 +236,10 @@ export async function getInspectionSession(
   return requestJson<InspectionSession>(
     `/sessions/${encodeURIComponent(sessionId)}`,
   );
+}
+
+export async function getVoiceConfig(): Promise<VoiceRuntimeConfig> {
+  return requestJson<VoiceRuntimeConfig>("/voice/config");
 }
 
 export async function startInspectionSession(

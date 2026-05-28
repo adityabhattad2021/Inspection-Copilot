@@ -1,19 +1,19 @@
-export type SampleFrameTone = "clear" | "dark" | "issue" | "wide";
+export type InspectionFrameTone = "clear" | "dark" | "issue" | "wide";
 
-export type SampleFrame = {
+export type InspectionFrame = {
   key: string;
   label: string;
   note: string;
-  tone: SampleFrameTone;
+  tone: InspectionFrameTone;
 };
 
-export type SampleStepMedia = {
+export type InspectionStepMedia = {
   stepId: string;
-  frames: readonly SampleFrame[];
+  frames: readonly InspectionFrame[];
   observationTranscript?: string;
 };
 
-export const SAMPLE_STEP_MEDIA: readonly SampleStepMedia[] = [
+export const INSPECTION_STEP_MEDIA: readonly InspectionStepMedia[] = [
   {
     frames: [
       {
@@ -73,6 +73,6 @@ export const SAMPLE_STEP_MEDIA: readonly SampleStepMedia[] = [
   },
 ] as const;
 
-export function getSampleStepMedia(stepId: string): SampleStepMedia | null {
-  return SAMPLE_STEP_MEDIA.find((step) => step.stepId === stepId) ?? null;
+export function getInspectionStepMedia(stepId: string): InspectionStepMedia | null {
+  return INSPECTION_STEP_MEDIA.find((step) => step.stepId === stepId) ?? null;
 }

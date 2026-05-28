@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   analyzeLiveFrame,
   completeInspectionSession,
+  getVoiceConfig,
   runEngineCheck,
   savePhotoEvidence,
   startInspectionSession,
@@ -21,7 +22,7 @@ import {
   spacing,
   typography,
 } from "@/src/components/ui";
-import { getSampleStepMedia } from "@/src/data/sample-media";
+import { getInspectionStepMedia } from "@/src/data/live-inspection-media";
 import { CopilotStatusCard } from "@/src/features/inspection/copilot-status-card";
 import { EngineGuidedCheck } from "@/src/features/inspection/engine-guided-check";
 import {
@@ -38,7 +39,8 @@ import {
 import { InspectionStepCard } from "@/src/features/inspection/inspection-step-card";
 import { ObservationCard } from "@/src/features/inspection/observation-card";
 import { createInspectionVoiceDriver } from "@/src/features/inspection/pipecat-voice-boundary";
-import { SampleGuidanceCard } from "@/src/features/inspection/sample-guidance-card";
+import { LiveGuidanceCard } from "@/src/features/inspection/live-guidance-card";
+import { getCachedProfile } from "@/src/features/onboarding/profile-storage";
 
 type InspectionScreenProps = {
   sessionId: string;
@@ -66,8 +68,8 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   );
 
   const activeStep = session ? findActiveInspectionStep(session) : null;
-  const sampleMedia = activeStep ? getSampleStepMedia(activeStep.id) : null;
-  const currentFrame = sampleMedia?.frames[frameIndex] ?? null;
+  const stepMedia = activeStep ? getInspectionStepMedia(activeStep.id) : null;
+  const currentFrame = stepMedia?.frames[frameIndex] ?? null;
 
   useEffect(() => {
     let mounted = true;
@@ -83,14 +85,31 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       setErrorMessage(null);
 
       try {
-        await voiceDriver.connect(sessionId);
+        const [jockeyProfile, voiceConfig] = await Promise.all([
+          getCachedProfile().catch(() => null),
+          getVoiceConfig(),
+        ]);
+        if (!voiceConfig.ready) {
+          const missing = voiceConfig.missing.join(", ");
+          throw new Error(
+            missing
+              ? `Realtime voice is not ready. Missing: ${missing}.`
+              : "Realtime voice is not ready.",
+          );
+        }
+
         const startedSession = await startInspectionSession(sessionId, {
-          languageCode: "hi-IN",
+          jockeyName: jockeyProfile?.jockeyName,
+          languageCode: jockeyProfile?.languageCode,
+        });
+        await voiceDriver.connect({
+          jockeyName: jockeyProfile?.jockeyName,
+          languageCode: jockeyProfile?.languageCode,
+          sessionId,
+          startUrl: voiceConfig.startUrl,
         });
         if (mounted) {
           setSession(startedSession.session);
-          setAgentMessage(startedSession.agentMessage);
-          await voiceDriver.sendAgentMessage(startedSession.agentMessage);
         }
       } catch (error) {
         if (mounted) {
@@ -163,7 +182,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
     try {
       const evidence = await savePhotoEvidence({
-        localUri: `sample://${sampleKey}`,
+        localUri: `capture://${sampleKey}`,
         sampleKey,
         sessionId,
         stepId: step.id,
@@ -180,18 +199,18 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   }
 
   function handleUseNextFrame() {
-    if (!sampleMedia) {
+    if (!stepMedia) {
       return;
     }
 
     setAnalysis(null);
     setFrameIndex((current) =>
-      Math.min(current + 1, sampleMedia.frames.length - 1),
+      Math.min(current + 1, stepMedia.frames.length - 1),
     );
   }
 
   async function handleObservationAnswer() {
-    if (!activeStep || !sampleMedia?.observationTranscript || isBusy) {
+    if (!activeStep || !stepMedia?.observationTranscript || isBusy) {
       return;
     }
 
@@ -202,7 +221,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       const observation = await structureObservation({
         sessionId,
         stepId: activeStep.id,
-        transcript: sampleMedia.observationTranscript,
+        transcript: stepMedia.observationTranscript,
       });
       setSession(observation.session);
       setAgentMessage(observation.summary);
@@ -291,11 +310,11 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
       {activeStep ? <InspectionStepCard step={activeStep} /> : null}
 
-      {activeStep?.status === "needs_observation" && sampleMedia ? (
+      {activeStep?.status === "needs_observation" && stepMedia ? (
         <ObservationCard
           isBusy={isBusy}
           onAnswer={handleObservationAnswer}
-          transcript={sampleMedia.observationTranscript ?? ""}
+          transcript={stepMedia.observationTranscript ?? ""}
         />
       ) : null}
 
@@ -306,7 +325,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       {activeStep?.kind === "photo" &&
       activeStep.status !== "needs_observation" &&
       currentFrame ? (
-        <SampleGuidanceCard
+        <LiveGuidanceCard
           analysis={analysis}
           captureFlash={captureFlash}
           expectedParts={activeStep.expectedParts}
