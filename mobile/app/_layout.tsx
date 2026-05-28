@@ -1,3 +1,5 @@
+import "react-native-get-random-values";
+
 import { StatusBar } from "expo-status-bar";
 import { Stack } from "expo-router";
 

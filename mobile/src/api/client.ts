@@ -80,6 +80,55 @@ export type InspectionSession = {
   updatedAt: string;
 };
 
+export type StartInspectionSessionResponse = {
+  session: InspectionSession;
+  activeStep: InspectionStep | null;
+  agentMessage: string;
+};
+
+export type LiveFrameAnalysis = {
+  status: "adjust" | "hold";
+  guidance: string;
+  readyToCapture: boolean;
+  confidence: number;
+  visibleParts: string[];
+  problems: string[];
+};
+
+export type PhotoEvidenceResponse = {
+  evidenceId: string;
+  accepted: boolean;
+  completedStepId: string;
+  nextStep: InspectionStep | null;
+  agentMessage: string;
+  session: InspectionSession;
+};
+
+export type StructureObservationResponse = {
+  observationId: string;
+  summary: string;
+  structuredFields: Record<string, boolean | number | string>;
+  nextStep: InspectionStep | null;
+  session: InspectionSession;
+};
+
+export type EngineCheckResponse = {
+  phase: string;
+  nextPhase: string | null;
+  agentMessage: string;
+  questions: string[];
+  isComplete: boolean;
+  structuredFields: Record<string, boolean | number | string>;
+  session: InspectionSession | null;
+};
+
+export type CompleteInspectionSessionResponse = {
+  sessionId: string;
+  status: string;
+  completedStepCount: number;
+  agentMessage: string;
+};
+
 async function requestJson<TResponse>(
   path: string,
   options?: RequestInit,
@@ -176,5 +225,75 @@ export async function getInspectionSession(
 ): Promise<InspectionSession> {
   return requestJson<InspectionSession>(
     `/sessions/${encodeURIComponent(sessionId)}`,
+  );
+}
+
+export async function startInspectionSession(
+  sessionId: string,
+  request: { jockeyName?: string; languageCode?: string } = {},
+): Promise<StartInspectionSessionResponse> {
+  return requestJson<StartInspectionSessionResponse>(
+    `/sessions/${encodeURIComponent(sessionId)}/start`,
+    {
+      body: JSON.stringify(request),
+      method: "POST",
+    },
+  );
+}
+
+export async function analyzeLiveFrame(request: {
+  sessionId: string;
+  stepId: string;
+  sampleKey: string;
+}): Promise<LiveFrameAnalysis> {
+  return requestJson<LiveFrameAnalysis>("/ai/analyze-live-frame", {
+    body: JSON.stringify(request),
+    method: "POST",
+  });
+}
+
+export async function savePhotoEvidence(request: {
+  sessionId: string;
+  stepId: string;
+  sampleKey: string;
+  localUri?: string;
+}): Promise<PhotoEvidenceResponse> {
+  return requestJson<PhotoEvidenceResponse>("/evidence/photo", {
+    body: JSON.stringify(request),
+    method: "POST",
+  });
+}
+
+export async function structureObservation(request: {
+  sessionId: string;
+  stepId: string;
+  transcript: string;
+}): Promise<StructureObservationResponse> {
+  return requestJson<StructureObservationResponse>("/ai/structure-observation", {
+    body: JSON.stringify(request),
+    method: "POST",
+  });
+}
+
+export async function runEngineCheck(request: {
+  sessionId: string;
+  stepId: string;
+  phase: string;
+  transcript?: string;
+}): Promise<EngineCheckResponse> {
+  return requestJson<EngineCheckResponse>("/ai/engine-check", {
+    body: JSON.stringify(request),
+    method: "POST",
+  });
+}
+
+export async function completeInspectionSession(
+  sessionId: string,
+): Promise<CompleteInspectionSessionResponse> {
+  return requestJson<CompleteInspectionSessionResponse>(
+    `/sessions/${encodeURIComponent(sessionId)}/complete`,
+    {
+      method: "POST",
+    },
   );
 }

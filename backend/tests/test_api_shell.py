@@ -83,8 +83,8 @@ def test_create_session_returns_vehicle_and_five_step_plan():
     assert body["plan"]["name"] == "SUV Petrol Automatic Inspection Plan"
     assert [step["id"] for step in body["plan"]["steps"]] == [
         "front-main",
-        "rear-main",
         "lhs-front-door",
+        "rear-main",
         "dashboard-odometer",
         "engine-sound",
     ]
@@ -136,8 +136,8 @@ def test_create_session_persists_snapshot_of_seeded_plan_steps():
 
     assert rows == [
         ("front-main", "pending", 1),
-        ("rear-main", "pending", 2),
-        ("lhs-front-door", "pending", 3),
+        ("lhs-front-door", "pending", 2),
+        ("rear-main", "pending", 3),
         ("dashboard-odometer", "pending", 4),
         ("engine-sound", "pending", 5),
     ]
