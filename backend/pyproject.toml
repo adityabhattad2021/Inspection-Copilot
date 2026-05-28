@@ -1,0 +1,20 @@
+[project]
+name = "cars24-jockey-copilot-backend"
+version = "0.1.0"
+description = "FastAPI backend for the Cars24 Jockey Copilot hackathon prototype."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.115.6",
+  "httpx==0.28.1",
+  "pydantic==2.10.4",
+  "uvicorn==0.34.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==8.3.4",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
