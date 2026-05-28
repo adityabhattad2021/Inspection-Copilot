@@ -8,7 +8,7 @@
 | Camera | React Native VisionCamera | Live preview, programmatic `takePhoto()`, future frame processors |
 | Backend | FastAPI Python on AWS Lambda using Mangum | Python AI workflow, simple AWS deployment |
 | Media | S3 presigned uploads | Device uploads evidence and backend stores generated report artifacts |
-| State | DynamoDB session table | Durable inspection, external report, and evidence metadata |
+| State | Local SQLite file for hack, swappable later | Durable-enough local inspection state without SaaS dependency |
 | AI | OpenAI behind FastAPI | Device never holds AI keys; backend controls prompts and schemas |
 | Vehicle data | Mock registration lookup for hack | Same interface can later connect to Cars24/RC provider |
 | Video strategy | Sampled frames, not raw video stream | Feasible, lower latency/cost, supported by current OpenAI vision flow |
@@ -34,7 +34,7 @@ flowchart LR
   subgraph AWS["AWS Backend"]
     API["API Gateway"]
     Lambda["FastAPI Lambda<br/>Mangum"]
-    DDB["DynamoDB<br/>inspection sessions"]
+    DDB["SQLite<br/>local inspection sessions"]
     S3["S3<br/>photos + optional audio + report HTML/JSON"]
     Logs["CloudWatch Logs"]
   end
@@ -200,7 +200,7 @@ sequenceDiagram
   actor J as Car Jockey
   participant App as RN App
   participant API as FastAPI Lambda
-  participant DDB as DynamoDB
+  participant DDB as SQLite
   participant S3 as S3
   participant OAI as OpenAI
 
@@ -333,7 +333,7 @@ sequenceDiagram
   participant API as FastAPI
   participant AI as OpenAI
   participant S3 as S3
-  participant DDB as DynamoDB
+  participant DDB as SQLite
 
   App->>API: POST /ai/engine-check phase=start
   API->>AI: Vehicle + engine checklist fields
@@ -365,7 +365,7 @@ sequenceDiagram
   participant App as RN App
   participant API as FastAPI
   participant AI as OpenAI
-  participant DDB as DynamoDB
+  participant DDB as SQLite
   participant S3 as S3
   participant Dash as Ops Dashboard
   participant Mail as Email Provider
@@ -577,7 +577,7 @@ flowchart TD
   Session --> ReportHTML["report/report.html"]
   Session --> ReportJSON["report/report.json"]
 
-  Table["DynamoDB: jockey-copilot-sessions"] --> PK["PK: sessionId"]
+  Table["SQLite: inspection_sessions"] --> PK["PK: sessionId"]
   PK --> Meta["vehicle + plan + status"]
   PK --> Evidence["evidence metadata"]
   PK --> Interventions["AI interventions"]
@@ -593,7 +593,7 @@ flowchart LR
 
   Expo --> APIGW["API Gateway HTTPS"]
   APIGW --> Lambda["Lambda<br/>FastAPI + Mangum"]
-  Lambda --> DDB["DynamoDB"]
+  Lambda --> DDB["SQLite local file<br/>replaceable DB adapter"]
   Lambda --> S3["S3"]
   Lambda --> SES["SES/email provider<br/>optional"]
   Lambda --> Secrets["Lambda env / Secrets Manager<br/>OPENAI_API_KEY"]
@@ -662,7 +662,7 @@ flowchart TD
   B -->|"saveObservation"| C
   B -->|"POST typed request"| D["api/client.ts"]
   D -->|"Pydantic-compatible JSON"| E["FastAPI routes"]
-  E -->|"service call"| F["OpenAI/S3/DynamoDB services"]
+  E -->|"service call"| F["OpenAI/S3/SQLite services"]
   F -->|"strict JSON response"| D
   D -->|"Zod parse"| B
 ```

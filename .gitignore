@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+backend/.local/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+mobile/node_modules/
+mobile/.expo/
