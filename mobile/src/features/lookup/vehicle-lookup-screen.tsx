@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Button,
   Card,
-  ProgressRail,
   StatusPill,
   colors,
   radius,
@@ -17,14 +16,6 @@ type VehicleLookupScreenProps = {
   jockeyProfile: JockeyProfile;
 };
 
-const demoSteps = [
-  { id: "front", label: "Front", status: "pending" as const },
-  { id: "rear", label: "Rear", status: "pending" as const },
-  { id: "door", label: "Door", status: "pending" as const },
-  { id: "dash", label: "Dash", status: "pending" as const },
-  { id: "engine", label: "Engine", status: "pending" as const },
-];
-
 export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps) {
   const insets = useSafeAreaInsets();
 
@@ -33,81 +24,80 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
       contentContainerStyle={{
         backgroundColor: colors.background,
         flexGrow: 1,
-        gap: spacing.md,
         paddingBottom: insets.bottom + spacing.xl,
-        paddingHorizontal: spacing.md,
-        paddingTop: insets.top + spacing.xl,
+        paddingHorizontal: spacing.lg,
+        paddingTop: insets.top + spacing.sm,
       }}
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
       style={{ backgroundColor: colors.background }}
     >
-      <View style={{ gap: spacing.sm }}>
-        <StatusPill
-          label={`${jockeyProfile.languageLabel} instructions`}
-          tone="ai"
-        />
-        <Text selectable style={[typography.title, { fontSize: 28 }]}>
-          Hi {jockeyProfile.jockeyName}
-        </Text>
-        <Text selectable style={typography.subtitle}>
-          Start with vehicle lookup, then Copilot will guide each inspection
-          angle.
-        </Text>
-      </View>
-
-      <Card>
-        <View style={{ gap: spacing.md }}>
-          <View style={{ gap: spacing.xs }}>
-            <Text selectable style={typography.label}>
-              Registration number
-            </Text>
-            <TextInput
-              autoCapitalize="characters"
-              autoCorrect={false}
-              defaultValue="KA03MX2147"
-              placeholder="KA03MX2147"
-              placeholderTextColor={colors.textSubtle}
-              returnKeyType="done"
-              style={{
-                backgroundColor: colors.surfaceMuted,
-                borderColor: colors.border,
-                borderCurve: "continuous",
-                borderRadius: radius.md,
-                borderWidth: 1,
-                color: colors.text,
-                fontSize: 20,
-                fontVariant: ["tabular-nums"],
-                fontWeight: "800",
-                letterSpacing: 0,
-                minHeight: 56,
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.sm,
-              }}
-            />
-          </View>
-
-          <Button label="Lookup vehicle" onPress={() => {}} size="lg" />
-        </View>
-      </Card>
-
-      <Card tone="muted">
+      <View style={{ flex: 1, gap: spacing.xl }}>
         <View style={{ gap: spacing.sm }}>
           <View
             style={{
               alignItems: "center",
               flexDirection: "row",
+              gap: spacing.sm,
               justifyContent: "space-between",
             }}
           >
-            <Text selectable style={typography.label}>
-              Demo inspection plan
+            <Text
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+              numberOfLines={1}
+              selectable
+              style={[typography.title, { flex: 1, fontSize: 30 }]}
+            >
+              Hi {jockeyProfile.jockeyName},
             </Text>
-            <StatusPill label="5 steps" tone="neutral" />
+            <StatusPill
+              label={`${jockeyProfile.languageLabel} instructions`}
+              tone="ai"
+            />
           </View>
-          <ProgressRail steps={demoSteps} />
+          <Text selectable style={typography.subtitle}>
+            Enter the registration number to start inspection.
+          </Text>
         </View>
-      </Card>
+
+        <View style={{ flex: 1, justifyContent: "center" }}>
+          <Card>
+            <View style={{ gap: spacing.md }}>
+              <View style={{ gap: spacing.xs }}>
+                <Text selectable style={typography.label}>
+                  Registration number
+                </Text>
+                <TextInput
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  defaultValue="KA03MX2147"
+                  placeholder="KA03MX2147"
+                  placeholderTextColor={colors.textSubtle}
+                  returnKeyType="done"
+                  style={{
+                    backgroundColor: colors.surfaceMuted,
+                    borderColor: colors.border,
+                    borderCurve: "continuous",
+                    borderRadius: radius.md,
+                    borderWidth: 1,
+                    color: colors.text,
+                    fontSize: 20,
+                    fontVariant: ["tabular-nums"],
+                    fontWeight: "800",
+                    letterSpacing: 0,
+                    minHeight: 56,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                  }}
+                />
+              </View>
+
+              <Button label="Lookup vehicle" onPress={() => {}} size="lg" />
+            </View>
+          </Card>
+        </View>
+      </View>
     </ScrollView>
   );
 }
