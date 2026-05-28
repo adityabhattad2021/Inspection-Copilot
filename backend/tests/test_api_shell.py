@@ -161,3 +161,86 @@ def test_get_session_rejects_unknown_session_id():
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Inspection session not found"
+
+
+def test_create_profile_persists_jockey_profile_to_local_sqlite():
+    response = client.post(
+        "/profiles",
+        json={"name": " Aditya ", "languageCode": "kn-IN"},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["profileId"].startswith("jockey_")
+    assert body["name"] == "Aditya"
+    assert body["languageCode"] == "kn-IN"
+    assert body["languageLabel"] == "Kannada"
+    assert body["createdAt"].endswith("Z")
+    assert body["updatedAt"] == body["createdAt"]
+
+    db_path = os.environ["JOCKEY_COPILOT_DB_PATH"]
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT profile_id, name, language_code, language_label
+            FROM jockey_profiles
+            WHERE profile_id = ?
+            """,
+            (body["profileId"],),
+        ).fetchone()
+
+    assert row == (
+        body["profileId"],
+        "Aditya",
+        "kn-IN",
+        "Kannada",
+    )
+
+
+def test_get_profile_returns_existing_jockey_profile():
+    create_response = client.post(
+        "/profiles",
+        json={"name": "Ravi", "languageCode": "hi-IN"},
+    )
+    profile_id = create_response.json()["profileId"]
+
+    get_response = client.get(f"/profiles/{profile_id}")
+
+    assert get_response.status_code == 200
+    assert get_response.json() == create_response.json()
+
+
+def test_list_profiles_returns_all_created_jockey_profiles():
+    first_response = client.post(
+        "/profiles",
+        json={"name": "Ravi", "languageCode": "hi-IN"},
+    )
+    second_response = client.post(
+        "/profiles",
+        json={"name": "Asha", "languageCode": "kn-IN"},
+    )
+
+    response = client.get("/profiles")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["profiles"] == [
+        first_response.json(),
+        second_response.json(),
+    ]
+
+
+def test_create_profile_rejects_unsupported_language_code():
+    response = client.post(
+        "/profiles",
+        json={"name": "Ravi", "languageCode": "fr-FR"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_get_profile_rejects_unknown_profile_id():
+    response = client.get("/profiles/jockey_missing")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Jockey profile not found"

@@ -30,10 +30,14 @@ import {
 } from "@/src/features/onboarding/profile";
 
 type JockeyOnboardingScreenProps = {
+  errorMessage?: string | null;
+  isSubmitting?: boolean;
   onContinue: (profile: JockeyProfile) => void;
 };
 
 export function JockeyOnboardingScreen({
+  errorMessage,
+  isSubmitting = false,
   onContinue,
 }: JockeyOnboardingScreenProps) {
   const insets = useSafeAreaInsets();
@@ -220,9 +224,11 @@ export function JockeyOnboardingScreen({
                 transform: [{ translateY: buttonLift }],
               }}
             >
+              {errorMessage ? <OnboardingError message={errorMessage} /> : null}
               <Button
                 disabled={!canContinue}
                 label={primaryLabel}
+                loading={isSubmitting}
                 onPress={handlePrimaryPress}
                 size="lg"
               />
@@ -236,7 +242,17 @@ export function JockeyOnboardingScreen({
               justifyContent: "space-between",
             }}
           >
-            <View style={{ gap: spacing.xl }}>
+            <View
+              style={[
+                { gap: spacing.xl },
+                stepId === "narrative"
+                  ? {
+                      flex: 1,
+                      justifyContent: "center",
+                    }
+                  : null,
+              ]}
+            >
               {stepId === "narrative" ? <NarrativeStep /> : null}
               {stepId === "language" ? (
                 <LanguageStep
@@ -247,9 +263,11 @@ export function JockeyOnboardingScreen({
               ) : null}
             </View>
 
+            {errorMessage ? <OnboardingError message={errorMessage} /> : null}
             <Button
               disabled={!canContinue}
               label={primaryLabel}
+              loading={isSubmitting}
               onPress={handlePrimaryPress}
               size="lg"
             />
@@ -257,6 +275,27 @@ export function JockeyOnboardingScreen({
         )}
       </View>
     </ScrollView>
+  );
+}
+
+type OnboardingErrorProps = {
+  message: string;
+};
+
+function OnboardingError({ message }: OnboardingErrorProps) {
+  return (
+    <Text
+      selectable
+      style={[
+        typography.small,
+        {
+          color: colors.danger,
+          textAlign: "center",
+        },
+      ]}
+    >
+      {message}
+    </Text>
   );
 }
 

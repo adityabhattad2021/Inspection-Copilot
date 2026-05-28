@@ -14,6 +14,15 @@ CREATE TABLE IF NOT EXISTS vehicles (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS jockey_profiles (
+    profile_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    language_code TEXT NOT NULL,
+    language_label TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS inspection_plan_templates (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,

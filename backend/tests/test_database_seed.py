@@ -20,6 +20,7 @@ def test_seed_database_creates_full_local_schema(monkeypatch, tmp_path):
 
     assert {
         "vehicles",
+        "jockey_profiles",
         "inspection_plan_templates",
         "inspection_plan_steps",
         "inspection_sessions",

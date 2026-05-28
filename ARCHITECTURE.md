@@ -23,6 +23,7 @@ flowchart LR
   end
 
   subgraph App["React Native Android App"]
+    Onboarding["Jockey Onboarding"]
     Lookup["Vehicle Lookup"]
     Plan["Dynamic Inspection Plan"]
     Camera["VisionCamera Live Guidance"]
@@ -48,10 +49,12 @@ flowchart LR
     Email["Email Link<br/>optional"]
   end
 
-  J --> Lookup
+  J --> Onboarding
+  Onboarding --> Lookup
   J --> Camera
   J --> Engine
   Camera --> C
+  Onboarding --> API
   Lookup --> API
   Camera --> API
   Engine --> API
@@ -75,7 +78,13 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  Start["app/index.tsx<br/>Registration Entry"] --> LookupAPI["POST /vehicles/lookup"]
+  Start["app/index.tsx<br/>Profile Gate"] --> ProfileCache{"Cached profile?"}
+  ProfileCache -->|No| Onboarding["app/onboarding.tsx<br/>Jockey Setup"]
+  ProfileCache -->|Yes| GetProfile["GET /profiles/{profileId}"]
+  Onboarding --> CreateProfile["POST /profiles"]
+  CreateProfile --> Start
+  GetProfile --> Lookup["Registration Entry"]
+  Lookup --> LookupAPI["POST /vehicles/lookup"]
   LookupAPI --> SessionAPI["POST /sessions"]
   SessionAPI --> Inspect["app/inspection/[sessionId].tsx"]
 
@@ -143,6 +152,7 @@ flowchart LR
 ```mermaid
 flowchart LR
   subgraph Routes["app/routes"]
+    Profiles["profiles.py"]
     Vehicles["vehicles.py"]
     Sessions["sessions.py"]
     Uploads["uploads.py"]
@@ -170,6 +180,9 @@ flowchart LR
     ReportModel["report.py"]
   end
 
+  ProfileStore["database/profile_queries.py"]
+
+  Profiles --> ProfileStore
   Vehicles --> VehicleLookup
   Sessions --> PlanGen
   Uploads --> S3Svc

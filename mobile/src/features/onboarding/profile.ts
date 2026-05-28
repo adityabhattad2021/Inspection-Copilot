@@ -47,6 +47,10 @@ export type JockeyProfile = {
   voiceLabel: string;
 };
 
+export type SavedJockeyProfile = JockeyProfile & {
+  profileId: string;
+};
+
 type CreateJockeyProfileInput = {
   jockeyName: string;
   languageCode: InstructionLanguageCode;
@@ -82,4 +86,24 @@ export function createJockeyProfile({
     languageLabel: language.label,
     voiceLabel: language.voiceLabel,
   };
+}
+
+export function isSavedJockeyProfile(value: unknown): value is SavedJockeyProfile {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Partial<SavedJockeyProfile>;
+
+  return (
+    typeof candidate.profileId === "string" &&
+    candidate.profileId.length > 0 &&
+    typeof candidate.jockeyName === "string" &&
+    candidate.jockeyName.length > 0 &&
+    isInstructionLanguageCode(candidate.languageCode) &&
+    typeof candidate.languageLabel === "string" &&
+    candidate.languageLabel.length > 0 &&
+    typeof candidate.voiceLabel === "string" &&
+    candidate.voiceLabel.length > 0
+  );
 }
