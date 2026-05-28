@@ -1,4 +1,4 @@
-.PHONY: help install dev test check clean
+.PHONY: help install dev test check db-seed db-clear db-reset clean
 
 BACKEND_PORT ?= 8000
 BACKEND_HOST ?= 0.0.0.0
@@ -10,6 +10,9 @@ help:
 	@echo "  make dev     - run FastAPI backend"
 	@echo "  make test    - run pytest"
 	@echo "  make check   - verify /health"
+	@echo "  make db-seed - seed local SQLite demo data"
+	@echo "  make db-clear - clear local SQLite database"
+	@echo "  make db-reset - clear and reseed local SQLite database"
 	@echo "  make clean   - remove backend caches"
 
 install:
@@ -26,6 +29,15 @@ check:
 	@curl -fsS $(BACKEND_URL)/health >/dev/null \
 		&& echo "Backend is live at $(BACKEND_URL)" \
 		|| (echo "Backend is not responding. Start it with: make dev" && exit 1)
+
+db-seed:
+	uv run python -m app.seed seed
+
+db-clear:
+	uv run python -m app.seed clear
+
+db-reset:
+	uv run python -m app.seed reset
 
 clean:
 	@rm -rf .pytest_cache .ruff_cache .local

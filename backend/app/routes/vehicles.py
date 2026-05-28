@@ -3,6 +3,8 @@ import re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.database import get_vehicle, list_vehicles
+
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
 
 
@@ -27,20 +29,8 @@ class VehicleProfile(BaseModel):
     registration_state: str = Field(alias="registrationState")
 
 
-DEMO_VEHICLES: dict[str, VehicleProfile] = {
-    "KA03MX2147": VehicleProfile(
-        registration_number="KA03MX2147",
-        make="Hyundai",
-        model="Creta",
-        year=2020,
-        variant="SX",
-        fuel_type="Petrol",
-        transmission="Automatic",
-        body_type="SUV",
-        registration_city="Bengaluru",
-        registration_state="Karnataka",
-    )
-}
+class VehicleListResponse(BaseModel):
+    vehicles: list[VehicleProfile]
 
 
 def normalize_registration_number(registration_number: str) -> str:
@@ -49,12 +39,22 @@ def normalize_registration_number(registration_number: str) -> str:
 
 def lookup_demo_vehicle(registration_number: str) -> VehicleProfile:
     normalized = normalize_registration_number(registration_number)
-    vehicle = DEMO_VEHICLES.get(normalized)
+    vehicle = get_vehicle(normalized)
     if vehicle is None:
         raise HTTPException(status_code=404, detail="Unknown demo registration")
-    return vehicle
+    return VehicleProfile.model_validate(vehicle)
 
 
 @router.post("/lookup", response_model=VehicleProfile)
 def lookup_vehicle(request: VehicleLookupRequest) -> VehicleProfile:
     return lookup_demo_vehicle(request.registration_number)
+
+
+@router.get("", response_model=VehicleListResponse)
+def get_vehicles() -> VehicleListResponse:
+    return VehicleListResponse(
+        vehicles=[
+            VehicleProfile.model_validate(vehicle)
+            for vehicle in list_vehicles()
+        ]
+    )

@@ -1,9 +1,21 @@
+import os
+import sqlite3
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.database import clear_database, seed_database
 from app.main import app
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_sqlite_db(monkeypatch, tmp_path):
+    monkeypatch.setenv("JOCKEY_COPILOT_DB_PATH", str(tmp_path / "sessions.db"))
+    clear_database()
+    seed_database()
 
 
 def test_health_returns_ok():
@@ -32,6 +44,19 @@ def test_vehicle_lookup_returns_demo_vehicle_with_camel_case_fields():
         "registrationCity": "Bengaluru",
         "registrationState": "Karnataka",
     }
+
+
+def test_list_vehicles_returns_seeded_vehicles():
+    response = client.get("/vehicles")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [vehicle["registrationNumber"] for vehicle in body["vehicles"]] == [
+        "KA03MX2147",
+        "KA05NB7777",
+        "DL8CAF5031",
+    ]
+    assert body["vehicles"][0]["make"] == "Hyundai"
 
 
 def test_vehicle_lookup_rejects_unknown_demo_registration():
@@ -69,7 +94,56 @@ def test_create_session_returns_vehicle_and_five_step_plan():
     }
 
 
-def test_get_session_returns_existing_in_memory_session():
+def test_create_session_persists_session_to_local_sqlite():
+    response = client.post(
+        "/sessions",
+        json={"registrationNumber": "KA03MX2147"},
+    )
+    body = response.json()
+    db_path = os.environ["JOCKEY_COPILOT_DB_PATH"]
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT session_id, status, registration_number
+            FROM inspection_sessions
+            WHERE session_id = ?
+            """,
+            (body["sessionId"],),
+        ).fetchone()
+
+    assert row == (body["sessionId"], "created", "KA03MX2147")
+
+
+def test_create_session_persists_snapshot_of_seeded_plan_steps():
+    response = client.post(
+        "/sessions",
+        json={"registrationNumber": "KA03MX2147"},
+    )
+    body = response.json()
+    db_path = os.environ["JOCKEY_COPILOT_DB_PATH"]
+
+    with sqlite3.connect(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT step_id, status, sort_order
+            FROM inspection_session_steps
+            WHERE session_id = ?
+            ORDER BY sort_order
+            """,
+            (body["sessionId"],),
+        ).fetchall()
+
+    assert rows == [
+        ("front-main", "pending", 1),
+        ("rear-main", "pending", 2),
+        ("lhs-front-door", "pending", 3),
+        ("dashboard-odometer", "pending", 4),
+        ("engine-sound", "pending", 5),
+    ]
+
+
+def test_get_session_returns_existing_persisted_session():
     create_response = client.post(
         "/sessions",
         json={"registrationNumber": "KA03MX2147"},
