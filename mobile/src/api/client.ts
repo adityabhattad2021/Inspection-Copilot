@@ -36,6 +36,50 @@ type ProfileResponse = {
   updatedAt: string;
 };
 
+export type VehicleProfile = {
+  registrationNumber: string;
+  make: string;
+  model: string;
+  year: number;
+  variant: string;
+  fuelType: string;
+  transmission: string;
+  bodyType: string;
+  registrationCity: string;
+  registrationState: string;
+};
+
+export type AutoCaptureConfig = {
+  enabled: boolean;
+  holdMs: number;
+};
+
+export type InspectionStep = {
+  id: string;
+  fieldId: number;
+  fieldName: string;
+  section: string;
+  kind: string;
+  instructions: string;
+  expectedParts: string[];
+  status: string;
+  autoCapture: AutoCaptureConfig | null;
+};
+
+export type InspectionPlan = {
+  name: string;
+  steps: InspectionStep[];
+};
+
+export type InspectionSession = {
+  sessionId: string;
+  status: string;
+  vehicle: VehicleProfile;
+  plan: InspectionPlan;
+  createdAt: string;
+  updatedAt: string;
+};
+
 async function requestJson<TResponse>(
   path: string,
   options?: RequestInit,
@@ -107,4 +151,30 @@ export async function getProfile(
   );
 
   return toSavedJockeyProfile(payload);
+}
+
+export async function lookupVehicle(
+  registrationNumber: string,
+): Promise<VehicleProfile> {
+  return requestJson<VehicleProfile>("/vehicles/lookup", {
+    body: JSON.stringify({ registrationNumber }),
+    method: "POST",
+  });
+}
+
+export async function createInspectionSession(
+  registrationNumber: string,
+): Promise<InspectionSession> {
+  return requestJson<InspectionSession>("/sessions", {
+    body: JSON.stringify({ registrationNumber }),
+    method: "POST",
+  });
+}
+
+export async function getInspectionSession(
+  sessionId: string,
+): Promise<InspectionSession> {
+  return requestJson<InspectionSession>(
+    `/sessions/${encodeURIComponent(sessionId)}`,
+  );
 }
