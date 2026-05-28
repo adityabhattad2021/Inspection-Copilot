@@ -9,7 +9,6 @@ import {
   Button,
   colors,
   radius,
-  shadows,
   spacing,
   typography,
 } from "@/src/components/ui";
@@ -17,6 +16,10 @@ import {
   lookupVehicleAndBuildFoundRoute,
   normalizeRegistrationNumber,
 } from "@/src/features/lookup/vehicle-found-navigation";
+import {
+  formatRegistrationPlate,
+  RegistrationPlateShell,
+} from "@/src/features/lookup/registration-plate";
 import type { JockeyProfile } from "@/src/features/onboarding/profile";
 
 type VehicleLookupScreenProps = {
@@ -25,7 +28,8 @@ type VehicleLookupScreenProps = {
 
 const DEMO_REGISTRATION_NUMBER = "KA03MX2147";
 export const LOOKUP_SCREEN_LAYOUT = {
-  mode: "centered-command-card",
+  input: "ind-number-plate",
+  mode: "greeting-centered-plate-inline",
 } as const;
 
 function toUserMessage(error: unknown) {
@@ -46,6 +50,9 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
 
   const normalizedRegistrationNumber =
     normalizeRegistrationNumber(registrationNumber);
+  const formattedRegistrationNumber = formatRegistrationPlate(
+    registrationNumber,
+  );
   const canLookup = normalizedRegistrationNumber.length > 0 && !isLookingUp;
 
   function handleRegistrationChange(value: string) {
@@ -81,10 +88,9 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
       contentContainerStyle={{
         backgroundColor: colors.background,
         flexGrow: 1,
-        justifyContent: "center",
-        paddingBottom: insets.bottom + spacing.xxl,
+        paddingBottom: insets.bottom + spacing.xl,
         paddingHorizontal: spacing.lg,
-        paddingTop: insets.top + spacing.xxl,
+        paddingTop: insets.top + spacing.xl,
       }}
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
@@ -92,93 +98,177 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
     >
       <View
         style={{
-          backgroundColor: colors.surface,
-          borderCurve: "continuous",
-          borderRadius: radius.md,
-          gap: spacing.xxl,
+          alignItems: "flex-start",
+          flexDirection: "row",
+          gap: spacing.md,
           justifyContent: "space-between",
-          minHeight: 382,
-          padding: spacing.lg,
-          ...shadows.lift,
         }}
       >
-        <View style={{ alignItems: "center", gap: spacing.xs }}>
+        <View style={{ flex: 1, gap: spacing.xxs }}>
           <Text
             adjustsFontSizeToFit
             minimumFontScale={0.82}
-            numberOfLines={2}
+            numberOfLines={1}
             selectable
             style={[
               typography.title,
               {
-                fontSize: 28,
-                lineHeight: 34,
-                textAlign: "center",
+                color: colors.textMuted,
+                fontSize: 24,
+                fontWeight: "700",
+                lineHeight: 30,
+              },
+          ]}
+        >
+            Hello
+          </Text>
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+            numberOfLines={1}
+            selectable
+            style={[
+              typography.title,
+              {
+                fontSize: 34,
+                lineHeight: 40,
               },
             ]}
           >
-            Start guided inspection
-          </Text>
-          <Text
-            selectable
-            style={[typography.subtitle, { textAlign: "center" }]}
-          >
-            Enter the vehicle registration to identify the car and load its AI
-            inspection plan.
+            {jockeyProfile.jockeyName}
           </Text>
         </View>
-
-        <View style={{ gap: spacing.md }}>
+        <View
+          style={{
+            alignItems: "center",
+            alignSelf: "flex-start",
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderCurve: "continuous",
+            borderRadius: radius.pill,
+            borderWidth: 1,
+            flexDirection: "row",
+            gap: spacing.xs,
+            marginTop: spacing.sm,
+            maxWidth: 142,
+            minHeight: 36,
+            paddingHorizontal: spacing.sm,
+            paddingVertical: spacing.xxs,
+          }}
+        >
           <View
             style={{
-              gap: spacing.xs,
+              backgroundColor: colors.ai,
+              borderRadius: radius.pill,
+              height: 7,
+              width: 7,
+            }}
+          />
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.76}
+            numberOfLines={1}
+            selectable
+            style={[
+              typography.small,
+              {
+                color: colors.text,
+                flexShrink: 1,
+              },
+            ]}
+          >
+            {jockeyProfile.languageLabel} voice
+          </Text>
+        </View>
+      </View>
+
+      <View
+        style={{
+          flex: 1,
+          paddingTop: spacing.xl,
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+          }}
+        >
+          <View
+            style={{
+              gap: spacing.xxl + spacing.xs,
+              justifyContent: "center",
             }}
           >
-            <Text selectable style={typography.eyebrow}>
-              Hi {jockeyProfile.jockeyName} / {jockeyProfile.languageLabel}
-            </Text>
             <View style={{ gap: spacing.xs }}>
-              <Text selectable style={typography.label}>
-                Registration command
+              <Text
+                adjustsFontSizeToFit
+                minimumFontScale={0.82}
+                numberOfLines={2}
+                selectable
+                style={[
+                  typography.title,
+                  {
+                    fontSize: 28,
+                    lineHeight: 36,
+                  },
+                ]}
+              >
+                Enter the Registration Number
               </Text>
-              <TextInput
-                autoCapitalize="characters"
-                autoCorrect={false}
-                onChangeText={handleRegistrationChange}
-                onSubmitEditing={handleLookup}
-                placeholder="KA03MX2147"
-                placeholderTextColor={colors.textSubtle}
-                returnKeyType="done"
-                style={{
-                  backgroundColor: colors.surfaceMuted,
-                  borderColor: isLookingUp ? colors.ai : colors.borderStrong,
-                  borderCurve: "continuous",
-                  borderRadius: radius.md,
-                  borderWidth: 1,
-                  color: colors.text,
-                  fontSize: 26,
-                  fontVariant: ["tabular-nums"],
-                  fontWeight: "900",
-                  letterSpacing: 0,
-                  minHeight: 62,
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.sm,
-                }}
-                value={registrationNumber}
-              />
+            </View>
+
+            <View style={{ gap: spacing.md }}>
+              <View style={{ gap: spacing.sm }}>
+                <RegistrationPlateShell>
+                  <TextInput
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    onChangeText={handleRegistrationChange}
+                    onSubmitEditing={handleLookup}
+                    placeholder="KA 03 MX 2147"
+                    placeholderTextColor={colors.textSubtle}
+                    returnKeyType="done"
+                    style={{
+                      backgroundColor: colors.white,
+                      color: colors.text,
+                      flex: 1,
+                      fontSize: 24,
+                      fontVariant: ["tabular-nums"],
+                      fontWeight: "900",
+                      letterSpacing: 0,
+                      minHeight: 70,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: spacing.xs,
+                      textAlign: "center",
+                    }}
+                    value={formattedRegistrationNumber}
+                  />
+                </RegistrationPlateShell>
+                {isLookingUp ? (
+                  <Text
+                    selectable
+                    style={[typography.small, { color: colors.aiText }]}
+                  >
+                    Matching vehicle profile...
+                  </Text>
+                ) : null}
+              </View>
+
+              {errorMessage ? (
+                <Text
+                  selectable
+                  style={[typography.small, { color: colors.danger }]}
+                >
+                  {errorMessage}
+                </Text>
+              ) : null}
             </View>
           </View>
-
-          {errorMessage ? (
-            <Text selectable style={[typography.small, { color: colors.danger }]}>
-              {errorMessage}
-            </Text>
-          ) : null}
         </View>
-
         <Button
           disabled={!canLookup}
-          label="Scan registration"
+          label="Lookup vehicle"
           loading={isLookingUp}
           onPress={handleLookup}
           size="lg"

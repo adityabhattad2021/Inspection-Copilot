@@ -10,6 +10,7 @@ import {
   spacing,
   typography,
 } from "@/src/components/ui";
+import { RegistrationPlateText } from "@/src/features/lookup/registration-plate";
 
 type VehicleIdentityPanelProps = {
   vehicle: VehicleProfile;
@@ -46,35 +47,15 @@ export function VehicleIdentityPanel({ vehicle }: VehicleIdentityPanelProps) {
       <View
         style={{
           alignItems: "center",
-          backgroundColor: "rgba(247, 250, 239, 0.06)",
-          borderColor: "rgba(215, 248, 92, 0.18)",
-          borderCurve: "continuous",
-          borderRadius: radius.md,
-          borderWidth: 1,
+          gap: spacing.sm,
           justifyContent: "center",
-          minHeight: 96,
-          padding: spacing.md,
+          paddingVertical: spacing.sm,
         }}
       >
         <Text selectable style={[typography.small, { color: colors.textOnDark }]}>
           Registration number
         </Text>
-        <Text
-          adjustsFontSizeToFit
-          minimumFontScale={0.76}
-          numberOfLines={1}
-          selectable
-          style={{
-            color: colors.ai,
-            fontSize: 34,
-            fontVariant: ["tabular-nums"],
-            fontWeight: "900",
-            letterSpacing: 0,
-            lineHeight: 42,
-          }}
-        >
-          {vehicle.registrationNumber}
-        </Text>
+        <RegistrationPlateText value={vehicle.registrationNumber} />
       </View>
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
