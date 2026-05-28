@@ -11,3 +11,5 @@ backend/*.sqlite3
 
 mobile/node_modules/
 mobile/.expo/
+.DS_Store
+kenney_car-kit/
