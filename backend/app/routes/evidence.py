@@ -15,6 +15,7 @@ from app.database import (
     set_step_status,
 )
 from app.routes.sessions import InspectionStep, SessionResponse
+from app.storage.s3_store import get_s3_bucket, upload_bytes
 
 router = APIRouter(prefix="/evidence", tags=["evidence"])
 
@@ -114,6 +115,16 @@ async def _store_uploaded_image(
         raise HTTPException(status_code=415, detail="Uploaded evidence must be an image")
 
     object_key = _photo_object_key(session_id, step_id)
+    configured_bucket = os.environ.get("JOCKEY_COPILOT_S3_BUCKET")
+    if configured_bucket:
+        local_uri = upload_bytes(
+            bucket=get_s3_bucket(),
+            object_key=object_key,
+            body=image_bytes,
+            content_type=content_type,
+        )
+        return object_key, local_uri, len(image_bytes), content_type
+
     destination = _evidence_root() / object_key
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(image_bytes)

@@ -59,6 +59,8 @@ The mobile client defaults to `http://localhost:8000`. For an Android device or 
 make android-ready
 ```
 
+Release builds default to the deployed AWS backend at `http://65.0.101.246` when `EXPO_PUBLIC_API_BASE_URL` is not set.
+
 ## Mobile Setup
 
 Run mobile commands from the repository root unless you are intentionally working inside `mobile/`.
@@ -160,6 +162,28 @@ make ios
 make reverse-android
 make unreverse-android
 ```
+
+## Local Production APK
+
+The app is Android-first. To build a production-configured APK locally with no Expo/EAS sign-in:
+
+```bash
+make mobile-build-android-apk
+```
+
+This writes:
+
+```text
+mobile/dist/jockey-copilot-release.apk
+```
+
+To build and install it on a connected Android phone:
+
+```bash
+make mobile-install-android-apk
+```
+
+The release APK points at the deployed backend. The current backend is HTTP, so Android cleartext traffic is temporarily enabled. Remove that once the backend has HTTPS on a domain.
 
 ## Demo Path
 

@@ -1,0 +1,63 @@
+import importlib
+
+from fastapi.testclient import TestClient
+
+
+def test_database_uses_dynamodb_backend_when_configured(monkeypatch):
+    monkeypatch.setenv("JOCKEY_COPILOT_STORAGE_BACKEND", "dynamodb")
+    monkeypatch.setenv("JOCKEY_COPILOT_DDB_TABLE", "cars24-jockey-hack")
+
+    import app.database as database
+
+    database = importlib.reload(database)
+
+    try:
+        assert database.get_vehicle.__module__ == "app.database.dynamodb_backend"
+        assert database.save_session_payload.__module__ == "app.database.dynamodb_backend"
+    finally:
+        monkeypatch.setenv("JOCKEY_COPILOT_STORAGE_BACKEND", "sqlite")
+        importlib.reload(database)
+
+
+def test_s3_photo_object_key():
+    from app.storage.s3_store import photo_object_key
+
+    assert (
+        photo_object_key("insp_123", "front-main")
+        == "sessions/insp_123/photos/front-main.jpg"
+    )
+
+
+def test_uploads_presign_returns_s3_shape(monkeypatch):
+    from app.main import app
+    from app.routes import uploads
+
+    monkeypatch.setenv("JOCKEY_COPILOT_S3_BUCKET", "cars24-jockey-hack-evidence-test")
+    monkeypatch.setattr(
+        uploads,
+        "create_presigned_upload_url",
+        lambda *, bucket, object_key, content_type, expires_in: (
+            f"https://example.test/{object_key}?signature=fake"
+        ),
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/uploads/presign",
+        json={
+            "sessionId": "insp_123",
+            "stepId": "front-main",
+            "kind": "photo",
+            "contentType": "image/jpeg",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "uploadUrl": (
+            "https://example.test/sessions/insp_123/photos/front-main.jpg"
+            "?signature=fake"
+        ),
+        "objectKey": "sessions/insp_123/photos/front-main.jpg",
+        "expiresIn": 900,
+    }

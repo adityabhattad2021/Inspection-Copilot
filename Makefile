@@ -1,4 +1,4 @@
-.PHONY: help doctor backend-install backend-dev backend-test backend-check backend-db-seed backend-db-clear backend-db-reset mobile-install mobile-start mobile-android mobile-ios android-check android-reverse android-unreverse android-ready clean
+.PHONY: help doctor backend-install backend-dev backend-test backend-check backend-db-seed backend-db-clear backend-db-reset backend-deploy backend-deploy-fast backend-deploy-seed backend-deploy-reset mobile-install mobile-start mobile-android mobile-ios mobile-build-android-apk mobile-install-android-apk android-check android-reverse android-unreverse android-ready clean
 
 ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 BACKEND_DIR := $(ROOT_DIR)backend
@@ -17,6 +17,10 @@ help:
 	@echo "  make backend-db-seed   - seed local SQLite demo data"
 	@echo "  make backend-db-clear  - clear local SQLite database"
 	@echo "  make backend-db-reset  - clear and reseed local SQLite database"
+	@echo "  make backend-deploy    - test, deploy, restart, and health-check AWS backend"
+	@echo "  make backend-deploy-fast - deploy AWS backend without running tests"
+	@echo "  make backend-deploy-seed - deploy AWS backend and run app.seed seed"
+	@echo "  make backend-deploy-reset - deploy AWS backend and run app.seed reset"
 	@echo "  make android-check     - show connected Android devices"
 	@echo "  make android-reverse   - map Android localhost:$(BACKEND_PORT) to computer"
 	@echo "  make android-unreverse - remove backend reverse mapping"
@@ -25,6 +29,8 @@ help:
 	@echo "  make mobile-start      - start Expo dev-client server"
 	@echo "  make mobile-android    - build/run Android dev client"
 	@echo "  make mobile-ios        - build/run iOS dev client"
+	@echo "  make mobile-build-android-apk - local release APK using deployed backend"
+	@echo "  make mobile-install-android-apk - build and install local release APK on Android"
 	@echo "  make clean             - remove local caches/build artifacts"
 
 backend-install:
@@ -50,6 +56,18 @@ backend-db-clear:
 
 backend-db-reset:
 	cd $(BACKEND_DIR) && uv run python -m app.seed reset
+
+backend-deploy:
+	$(ROOT_DIR)deploy/aws/deploy-backend.sh
+
+backend-deploy-fast:
+	$(ROOT_DIR)deploy/aws/deploy-backend.sh --skip-tests
+
+backend-deploy-seed:
+	$(ROOT_DIR)deploy/aws/deploy-backend.sh --seed
+
+backend-deploy-reset:
+	$(ROOT_DIR)deploy/aws/deploy-backend.sh --reset-seed
 
 android-check:
 	@echo "Connected Android devices:"
@@ -80,6 +98,12 @@ mobile-android:
 
 mobile-ios:
 	cd $(MOBILE_DIR) && $(MAKE) ios
+
+mobile-build-android-apk:
+	cd $(MOBILE_DIR) && $(MAKE) build-android-apk
+
+mobile-install-android-apk:
+	cd $(MOBILE_DIR) && $(MAKE) install-android-apk
 
 doctor:
 	@echo ""

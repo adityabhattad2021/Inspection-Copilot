@@ -1,14 +1,14 @@
+import asyncio
 import json
 import os
 import sqlite3
-import asyncio
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.database import clear_database, seed_database
 from app.main import app
-from app.voice.config import get_voice_runtime_config
+from app.voice.config import get_voice_ice_servers, get_voice_runtime_config
 from app.voice.prompts import build_realtime_instruction
 from app.voice.realtime_bot import (
     build_inspection_control_ack,
@@ -46,6 +46,7 @@ def isolated_sqlite_db(monkeypatch, tmp_path):
     monkeypatch.delenv("OPENAI_REALTIME_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_REALTIME_VOICE", raising=False)
     monkeypatch.delenv("JOCKEY_COPILOT_VOICE_BASE_URL", raising=False)
+    monkeypatch.delenv("JOCKEY_COPILOT_ICE_SERVERS_JSON", raising=False)
     clear_database()
     seed_database()
 
@@ -123,6 +124,37 @@ def test_voice_config_loads_openai_key_from_backend_env_file(monkeypatch, tmp_pa
     assert config.start_url == "http://127.0.0.1:8787/start"
 
 
+def test_voice_ice_servers_default_to_public_stun():
+    assert get_voice_ice_servers() == [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+    ]
+
+
+def test_voice_ice_servers_can_be_configured_for_turn(monkeypatch):
+    monkeypatch.setenv(
+        "JOCKEY_COPILOT_ICE_SERVERS_JSON",
+        json.dumps(
+            [
+                "stun:stun.example.com:19302",
+                {
+                    "credential": "turn-pass",
+                    "urls": ["turn:turn.example.com:3478"],
+                    "username": "turn-user",
+                },
+            ]
+        ),
+    )
+
+    assert get_voice_ice_servers() == [
+        {"urls": ["stun:stun.example.com:19302"]},
+        {
+            "credential": "turn-pass",
+            "urls": ["turn:turn.example.com:3478"],
+            "username": "turn-user",
+        },
+    ]
+
+
 def test_voice_start_endpoint_runs_on_the_main_fastapi_app():
     response = client.post(
         "/start",
@@ -130,7 +162,42 @@ def test_voice_start_endpoint_runs_on_the_main_fastapi_app():
     )
 
     assert response.status_code == 200
-    assert response.json()["sessionId"]
+    body = response.json()
+    assert body["sessionId"]
+    assert body["iceConfig"] == {
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}],
+    }
+
+
+def test_voice_start_endpoint_returns_configured_turn_ice(monkeypatch):
+    monkeypatch.setenv(
+        "JOCKEY_COPILOT_ICE_SERVERS_JSON",
+        json.dumps(
+            [
+                {
+                    "credential": "turn-pass",
+                    "urls": ["turn:turn.example.com:3478"],
+                    "username": "turn-user",
+                }
+            ]
+        ),
+    )
+
+    response = client.post(
+        "/start",
+        json={"body": {"sessionId": "insp_local", "languageCode": "hi-IN"}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["iceConfig"] == {
+        "iceServers": [
+            {
+                "credential": "turn-pass",
+                "urls": ["turn:turn.example.com:3478"],
+                "username": "turn-user",
+            }
+        ],
+    }
 
 
 def test_realtime_instruction_includes_vehicle_step_language_and_guardrails():
@@ -170,18 +237,15 @@ def test_realtime_bot_starts_with_immediate_greeting_turn():
         "You are Cars24 Jockey Copilot. Speak Hindi."
     )
 
-    assert messages[0] == {
-        "role": "system",
-        "content": "You are Cars24 Jockey Copilot. Speak Hindi.",
-    }
-    assert messages[1]["role"] == "user"
-    assert "short opening greeting" in messages[1]["content"]
-    assert "Saarthi" in messages[1]["content"]
-    assert "inspection navigator" in messages[1]["content"]
-    assert "Localize naturally" in messages[1]["content"]
-    assert "English radio phrases" in messages[1]["content"]
-    assert "Do not mention any inspection step" in messages[1]["content"]
-    assert "first inspection step" not in messages[1]["content"]
+    assert len(messages) == 1
+    assert messages[0]["role"] == "user"
+    assert "short opening greeting" in messages[0]["content"]
+    assert "Saarthi" in messages[0]["content"]
+    assert "inspection navigator" in messages[0]["content"]
+    assert "Localize naturally" in messages[0]["content"]
+    assert "English radio phrases" in messages[0]["content"]
+    assert "Do not mention any inspection step" in messages[0]["content"]
+    assert "first inspection step" not in messages[0]["content"]
 
 
 def test_realtime_text_events_inject_user_message_and_create_response():

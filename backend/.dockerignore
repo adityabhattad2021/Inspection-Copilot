@@ -1,0 +1,10 @@
+.local
+.pytest_cache
+.ruff_cache
+.uv-cache
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pkg
+AWSCLIV2.pkg

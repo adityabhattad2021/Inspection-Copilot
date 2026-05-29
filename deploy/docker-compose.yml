@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ../backend
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "80"
+    env_file:
+      - .env.aws
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - backend_local:/app/.local
+
+volumes:
+  backend_local:

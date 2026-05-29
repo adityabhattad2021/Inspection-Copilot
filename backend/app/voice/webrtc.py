@@ -13,12 +13,25 @@ from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequestHandler,
 )
 
+from app.voice.config import get_voice_ice_servers
 from app.voice.realtime_bot import bot
 
 router = APIRouter(tags=["voice-webrtc"])
 
 _active_sessions: dict[str, dict[str, Any]] = {}
 _small_webrtc_handler = SmallWebRTCRequestHandler()
+
+
+def build_ice_servers() -> list[IceServer]:
+    return [IceServer(**server) for server in get_voice_ice_servers()]
+
+
+def build_client_ice_config() -> dict[str, Any]:
+    return {"iceServers": get_voice_ice_servers()}
+
+
+def refresh_handler_ice_servers() -> None:
+    _small_webrtc_handler.update_ice_servers(build_ice_servers())
 
 
 @router.post("/api/offer")
@@ -28,6 +41,7 @@ async def offer(
     session_id: str | None = None,
 ):
     resolved_session_id = session_id or str(uuid.uuid4())
+    refresh_handler_ice_servers()
 
     async def webrtc_connection_callback(connection: SmallWebRTCConnection):
         runner_args = SmallWebRTCRunnerArguments(
@@ -59,12 +73,10 @@ async def start_voice_session(request: Request):
 
     session_id = str(uuid.uuid4())
     _active_sessions[session_id] = request_data.get("body", {})
-    result: dict[str, Any] = {"sessionId": session_id}
-
-    if request_data.get("enableDefaultIceServers"):
-        result["iceConfig"] = {
-            "iceServers": [IceServer(urls=["stun:stun.l.google.com:19302"]).model_dump()]
-        }
+    result: dict[str, Any] = {
+        "iceConfig": build_client_ice_config(),
+        "sessionId": session_id,
+    }
 
     return result
 

@@ -1,10 +1,12 @@
 import argparse
 
+import os
+
 from app.database import clear_database, get_database_path, seed_database
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Manage the local SQLite database.")
+    parser = argparse.ArgumentParser(description="Manage the configured backend database.")
     parser.add_argument(
         "command",
         choices=("seed", "clear", "reset"),
@@ -14,14 +16,15 @@ def main() -> None:
 
     if args.command == "clear":
         clear_database()
-        print(f"Cleared local database at {get_database_path()}")
+        print(f"Cleared database at {get_database_path()}")
         return
 
     if args.command == "reset":
         clear_database()
 
     seed_database()
-    print(f"Seeded local database at {get_database_path()}")
+    backend = os.environ.get("JOCKEY_COPILOT_STORAGE_BACKEND", "sqlite")
+    print(f"Seeded {backend} database at {get_database_path()}")
 
 
 if __name__ == "__main__":

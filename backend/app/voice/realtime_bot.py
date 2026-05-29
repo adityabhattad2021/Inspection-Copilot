@@ -84,9 +84,8 @@ def build_realtime_session_properties(
     )
 
 
-def build_initial_realtime_messages(instruction: str) -> list[dict[str, str]]:
+def build_initial_realtime_messages(_instruction: str) -> list[dict[str, str]]:
     return [
-        {"role": "system", "content": instruction},
         {
             "role": "user",
             "content": (
