@@ -1,17 +1,41 @@
-# Cars24 Jockey Copilot
+# Jockey Copilot
+
 
 Cars24 Jockey Copilot is a hackathon prototype for a live, voice-and-vision assisted vehicle inspection app. It helps a Car Jockey move through a focused Cars24-style inspection flow, gives realtime camera guidance, captures evidence, structures spoken observations, guides the engine-sound check, and submits the inspection for pricing and audit.
 
 The prototype is intentionally demo-first: local FastAPI backend, Expo React Native Android development build, deterministic demo vehicles and inspection plan, local SQLite state, local evidence files, and realtime voice routed through the backend so mobile never stores AI keys.
 
+## Preview
+<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 02 PM" src="https://github.com/user-attachments/assets/c227c532-e51e-45da-b1be-67cd5946e28a" />
+
+<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 03 PM" src="https://github.com/user-attachments/assets/727bcc55-e736-4d89-9039-6e4c34a11c4f" />
+
+<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 03 PM (1)" src="https://github.com/user-attachments/assets/d643001a-6136-470e-837c-5a09d675830e" />
+
+<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 04 PM" src="https://github.com/user-attachments/assets/57e89b0e-a84c-4d96-bedc-918a669aab24" />
+
+<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 04 PM (1)" src="https://github.com/user-attachments/assets/9bbdce4e-8b0f-4bd8-aea7-7b8ea010df47" />
+
+<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 05 PM (2)" src="https://github.com/user-attachments/assets/00a2c1f3-ee73-45b5-9600-2bb0172fc9e6" />
+
+<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 05 PM (3)" src="https://github.com/user-attachments/assets/e526c820-502b-4aa2-bf5d-18b66ff3e75e" />
+
+<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 06 PM" src="https://github.com/user-attachments/assets/ecc472c5-3568-4426-8577-5a04cb81289a" />
+
+
+
+
+
+
 ## What It Demonstrates
 
 - Jockey onboarding with language selection.
 - Demo registration lookup for known vehicles.
-- Dynamic four-step inspection plan.
+- Dynamic five-step inspection plan.
 - Realtime voice-guided camera flow.
 - Frame intervention events such as adjust, hold, and capture.
 - Photo evidence save path for sample and realtime captures.
+- Structured LHS door damage observation from natural language.
 - Guided engine-sound check based on Jockey answers.
 - Dev-only inspection flow logging for debugging the live demo.
 
@@ -27,14 +51,15 @@ The main pitch/demo path defaults to `KA03MX2147`.
 
 ## Inspection Flow
 
-The demo plan has four focused steps:
+The demo plan has five focused steps:
 
 1. Front Main
-2. Rear Main
-3. Dashboard and odometer reading
-4. Engine sound condition
+2. LHS front door
+3. Rear Main
+4. Dashboard and odometer reading
+5. Engine sound condition
 
-Photo steps can auto-capture after the realtime voice agent reports a hold/ready decision. The engine step guides the Jockey through idle, gentle rev, exhaust listening, and final answer submission.
+Photo steps can auto-capture after the realtime voice agent reports a hold/ready decision. The LHS front door step captures photo evidence only. The engine step guides the Jockey through idle, gentle rev, exhaust listening, and final answer submission.
 
 ## Repository Layout
 
@@ -226,7 +251,7 @@ make clean
 5. Create a Jockey profile and choose a language.
 6. Look up `KA03MX2147`.
 7. Confirm the vehicle and start inspection.
-8. Follow the voice guidance through Front Main, Rear Main, Dashboard/Odometer, and Engine Sound.
+8. Follow the voice guidance through Front Main, LHS front door, Rear Main, Dashboard/Odometer, and Engine Sound.
 9. Submit the inspection after the engine answer.
 
 The current mobile app returns to lookup after submission. External report generation is a later backend/dashboard concern in the sprint plan.
