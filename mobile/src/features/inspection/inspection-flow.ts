@@ -53,3 +53,20 @@ export function getProgressSteps(session: InspectionSession): ProgressStep[] {
     status: getProgressStatus(step),
   }));
 }
+
+export function getInspectionStepVoiceInstruction(
+  step: InspectionStep,
+  index: number,
+) {
+  const stepNumber = index + 1;
+
+  if (step.kind === "engine-guided") {
+    return `Step ${stepNumber}: ${step.fieldName}. ${step.instructions}`;
+  }
+
+  if (step.kind === "photo") {
+    return `Step ${stepNumber}: ${step.fieldName}. ${step.instructions} I will tell you when to hold.`;
+  }
+
+  return `Step ${stepNumber}: ${step.fieldName}. ${step.instructions}`;
+}

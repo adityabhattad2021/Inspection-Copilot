@@ -134,14 +134,9 @@ def start_session(
     active_step = _active_step(session)
     vehicle = session.vehicle
     name_prefix = f"{request.jockey_name}, " if request.jockey_name else ""
-    first_step_text = (
-        f"We'll begin with {active_step.field_name}."
-        if active_step is not None
-        else "All inspection steps are already complete."
-    )
     message = (
-        f"{name_prefix}inspection started for a {vehicle.year} "
-        f"{vehicle.make} {vehicle.model}. {first_step_text}"
+        f"{name_prefix}Saarthi is ready for the {vehicle.year} "
+        f"{vehicle.make} {vehicle.model} inspection."
     )
 
     return StartSessionResponse(

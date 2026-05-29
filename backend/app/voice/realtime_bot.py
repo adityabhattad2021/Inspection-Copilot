@@ -76,8 +76,13 @@ def build_initial_realtime_messages(instruction: str) -> list[dict[str, str]]:
         {
             "role": "user",
             "content": (
-                "Greet the jockey immediately, confirm that the realtime "
-                "copilot is connected, and introduce the first inspection step."
+                "Give only a short opening greeting in the requested language. "
+                "Introduce yourself as Saarthi with an energetic inspection "
+                "navigator feel, tell the jockey you will call angles and "
+                "evidence, and ask them to get ready. Localize naturally; do "
+                "not force English radio phrases if they sound strange. Do not "
+                "mention any inspection step, checklist field, camera angle, "
+                "or vehicle part yet."
             ),
         },
     ]
@@ -160,8 +165,14 @@ async def bot(runner_args: Any):
         rtvi_observer_params=build_voice_rtvi_observer_params(),
     )
 
+    has_queued_initial_context = False
+
     @rtvi.event_handler("on_client_ready")
     async def on_client_ready(_):
+        nonlocal has_queued_initial_context
+        if has_queued_initial_context:
+            return
+        has_queued_initial_context = True
         await task.queue_frame(LLMContextFrame(context=context))
 
     runner = PipelineRunner()

@@ -126,6 +126,10 @@ def test_realtime_instruction_includes_vehicle_step_language_and_guardrails():
     )
 
     assert "Cars24 Jockey Copilot" in instruction
+    assert "Saarthi" in instruction
+    assert "rally navigator" in instruction
+    assert "Localize naturally" in instruction
+    assert "on comms" in instruction
     assert "Aditya" in instruction
     assert "Hindi" in instruction
     assert "2020 Hyundai Creta" in instruction
@@ -144,8 +148,13 @@ def test_realtime_bot_starts_with_immediate_greeting_turn():
         "content": "You are Cars24 Jockey Copilot. Speak Hindi.",
     }
     assert messages[1]["role"] == "user"
-    assert "Greet the jockey immediately" in messages[1]["content"]
-    assert "first inspection step" in messages[1]["content"]
+    assert "short opening greeting" in messages[1]["content"]
+    assert "Saarthi" in messages[1]["content"]
+    assert "inspection navigator" in messages[1]["content"]
+    assert "Localize naturally" in messages[1]["content"]
+    assert "English radio phrases" in messages[1]["content"]
+    assert "Do not mention any inspection step" in messages[1]["content"]
+    assert "first inspection step" not in messages[1]["content"]
 
 
 def test_voice_tools_expose_observation_and_completion_functions():

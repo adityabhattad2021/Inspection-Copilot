@@ -12,6 +12,12 @@ export type InspectionVoiceEvent =
       type: "agent-message";
     }
   | {
+      type: "agent-speaking-started";
+    }
+  | {
+      type: "agent-speaking-stopped";
+    }
+  | {
       text: string;
       type: "user-transcript";
     };
@@ -33,11 +39,6 @@ export const PIPECAT_VOICE_BOUNDARY = {
   provider: "pipecat",
   transport: "small-webrtc",
 } as const;
-
-type SmallWebRTCTransportInternals = {
-  _handleTrackStarted?: (event: unknown) => Promise<void> | void;
-  pc?: unknown;
-};
 
 function buildStartRequestBody(request: InspectionVoiceConnectRequest) {
   const body: Record<string, string> = {
@@ -69,31 +70,6 @@ function messageToText(message: RTVIMessage) {
   return "Pipecat voice transport error.";
 }
 
-function guardTrackEventsUntilPeerConnectionExists(
-  nativeTransportSource: unknown,
-  mediaManagerSource: unknown,
-) {
-  const nativeTransport =
-    nativeTransportSource as SmallWebRTCTransportInternals;
-  const mediaManager = mediaManagerSource as {
-    onTrackStarted?: (event: unknown) => void;
-  };
-  const handleTrackStarted =
-    nativeTransport._handleTrackStarted?.bind(nativeTransport);
-
-  if (!handleTrackStarted) {
-    return;
-  }
-
-  mediaManager.onTrackStarted = async (event: unknown) => {
-    if (!nativeTransport.pc) {
-      return;
-    }
-
-    await handleTrackStarted(event);
-  };
-}
-
 export function createInspectionVoiceDriver(
   onEvent: (event: InspectionVoiceEvent) => void,
 ): InspectionVoiceDriver {
@@ -104,6 +80,8 @@ function createNativePipecatVoiceDriver(
   onEvent: (event: InspectionVoiceEvent) => void,
 ): InspectionVoiceDriver {
   let client: PipecatClientInstance | null = null;
+  let botTranscript = "";
+  let isBotSpeaking = false;
 
   return {
     async connect(request: InspectionVoiceConnectRequest) {
@@ -117,20 +95,34 @@ function createNativePipecatVoiceDriver(
         import("@pipecat-ai/react-native-small-webrtc-transport"),
       ]);
 
-      const mediaManager = new DailyMediaManager();
       const nativeTransport = new RNSmallWebRTCTransport({
-        mediaManager,
+        mediaManager: new DailyMediaManager(),
       });
-      guardTrackEventsUntilPeerConnectionExists(nativeTransport, mediaManager);
       const transport =
         nativeTransport as unknown as PipecatClientOptions["transport"];
 
       client = new PipecatClient({
         callbacks: {
-          onBotOutput: (data: BotOutputData) => {
-            if (data.text) {
-              onEvent({ text: data.text, type: "agent-message" });
+          onBotStartedSpeaking: () => {
+            if (isBotSpeaking) {
+              return;
             }
+
+            isBotSpeaking = true;
+            botTranscript = "";
+            onEvent({ type: "agent-speaking-started" });
+          },
+          onBotOutput: (data: BotOutputData) => {
+            if (!data.spoken || !data.text) {
+              return;
+            }
+
+            botTranscript += data.text;
+            onEvent({ text: botTranscript, type: "agent-message" });
+          },
+          onBotStoppedSpeaking: () => {
+            isBotSpeaking = false;
+            onEvent({ type: "agent-speaking-stopped" });
           },
           onError: (message: RTVIMessage) => {
             onEvent({ text: messageToText(message), type: "agent-message" });
@@ -146,6 +138,7 @@ function createNativePipecatVoiceDriver(
         transport,
       });
 
+      await client.initDevices();
       await client.startBotAndConnect({
         endpoint: request.startUrl,
         requestData: {

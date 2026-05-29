@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, ScrollView, Text } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,22 +29,37 @@ import {
   ENGINE_TRANSCRIPT,
   findActiveInspectionStep,
   getInspectionErrorMessage,
+  getInspectionStepVoiceInstruction,
   getProgressSteps,
   getVehicleTitle,
 } from "@/src/features/inspection/inspection-flow";
 import {
-  InspectionUnavailableView,
-  LoadingInspectionView,
-} from "@/src/features/inspection/inspection-state-view";
+  createInspectionGreetingGate,
+  finishInspectionGreeting,
+  getInspectionGreetingHandoffDelayMs,
+  recordInspectionGreetingOutput,
+  recordInspectionGreetingStarted,
+  recordInspectionGreetingStopped,
+} from "@/src/features/inspection/inspection-greeting-gate";
+import { InspectionGreetingView } from "@/src/features/inspection/inspection-greeting-view";
+import { InspectionUnavailableView } from "@/src/features/inspection/inspection-state-view";
 import { InspectionStepCard } from "@/src/features/inspection/inspection-step-card";
 import { ObservationCard } from "@/src/features/inspection/observation-card";
 import { createInspectionVoiceDriver } from "@/src/features/inspection/pipecat-voice-boundary";
+import {
+  getNextWordStreamText,
+  isWordStreamComplete,
+  normalizeWordStreamText,
+} from "@/src/features/inspection/word-stream";
 import { LiveGuidanceCard } from "@/src/features/inspection/live-guidance-card";
 import { getCachedProfile } from "@/src/features/onboarding/profile-storage";
 
 type InspectionScreenProps = {
   sessionId: string;
 };
+
+const GREETING_WORD_REVEAL_MS = 145;
+const GREETING_FINAL_DWELL_MS = 1000;
 
 export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   const insets = useSafeAreaInsets();
@@ -53,18 +68,139 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   const [analysis, setAnalysis] = useState<LiveFrameAnalysis | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [frameIndex, setFrameIndex] = useState(0);
+  const [greetingDisplayMessage, setGreetingDisplayMessage] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [isGreetingActive, setIsGreetingActive] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isComplete, setIsComplete] = useState(false);
   const captureFlash = useRef(new Animated.Value(0)).current;
+  const greetingGateRef = useRef(createInspectionGreetingGate());
+  const greetingDisplayMessageRef = useRef("");
+  const greetingFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const greetingTargetMessageRef = useRef("");
+  const greetingWordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const initialStepInstructionSentRef = useRef(false);
+
+  const clearGreetingFinishTimer = useCallback(() => {
+    if (greetingFinishTimerRef.current) {
+      clearTimeout(greetingFinishTimerRef.current);
+      greetingFinishTimerRef.current = null;
+    }
+  }, []);
+
+  const clearGreetingWordTimer = useCallback(() => {
+    if (greetingWordTimerRef.current) {
+      clearTimeout(greetingWordTimerRef.current);
+      greetingWordTimerRef.current = null;
+    }
+  }, []);
+
+  const updateGreetingDisplayMessage = useCallback((nextMessage: string) => {
+    greetingDisplayMessageRef.current = nextMessage;
+    setGreetingDisplayMessage(nextMessage);
+  }, []);
+
+  const scheduleGreetingWordReveal = useCallback(() => {
+    if (greetingWordTimerRef.current) {
+      return;
+    }
+
+    greetingWordTimerRef.current = setTimeout(() => {
+      greetingWordTimerRef.current = null;
+      const nextMessage = getNextWordStreamText(
+        greetingDisplayMessageRef.current,
+        greetingTargetMessageRef.current,
+      );
+
+      updateGreetingDisplayMessage(nextMessage);
+
+      if (!isWordStreamComplete(nextMessage, greetingTargetMessageRef.current)) {
+        scheduleGreetingWordReveal();
+      }
+    }, GREETING_WORD_REVEAL_MS);
+  }, [updateGreetingDisplayMessage]);
+
+  const scheduleGreetingHandoff = useCallback(() => {
+    const delay = getInspectionGreetingHandoffDelayMs(
+      greetingGateRef.current,
+      Date.now(),
+    );
+
+    if (delay === null) {
+      return;
+    }
+
+    clearGreetingFinishTimer();
+    greetingFinishTimerRef.current = setTimeout(() => {
+      greetingFinishTimerRef.current = null;
+      const nextDelay = getInspectionGreetingHandoffDelayMs(
+        greetingGateRef.current,
+        Date.now(),
+      );
+
+      if (nextDelay === null) {
+        return;
+      }
+
+      if (nextDelay > 0) {
+        scheduleGreetingHandoff();
+        return;
+      }
+
+      greetingGateRef.current = finishInspectionGreeting(
+        greetingGateRef.current,
+      );
+      greetingFinishTimerRef.current = setTimeout(() => {
+        greetingFinishTimerRef.current = null;
+        setIsGreetingActive(false);
+      }, GREETING_FINAL_DWELL_MS);
+    }, delay);
+  }, [clearGreetingFinishTimer]);
+
   const voiceDriver = useMemo(
     () =>
       createInspectionVoiceDriver((event) => {
+        if (event.type === "agent-speaking-started") {
+          greetingGateRef.current = recordInspectionGreetingStarted(
+            greetingGateRef.current,
+          );
+          clearGreetingFinishTimer();
+          return;
+        }
+
         if (event.type === "agent-message") {
           setAgentMessage(event.text);
+          if (greetingGateRef.current.isActive) {
+            greetingTargetMessageRef.current = normalizeWordStreamText(
+              event.text,
+            );
+            scheduleGreetingWordReveal();
+          }
+          greetingGateRef.current = recordInspectionGreetingOutput(
+            greetingGateRef.current,
+            event.text,
+            Date.now(),
+          );
+          scheduleGreetingHandoff();
+          return;
+        }
+
+        if (event.type === "agent-speaking-stopped") {
+          greetingGateRef.current = recordInspectionGreetingStopped(
+            greetingGateRef.current,
+          );
+          scheduleGreetingHandoff();
         }
       }),
-    [],
+    [
+      clearGreetingFinishTimer,
+      scheduleGreetingHandoff,
+      scheduleGreetingWordReveal,
+    ],
   );
 
   const activeStep = session ? findActiveInspectionStep(session) : null;
@@ -82,7 +218,15 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       }
 
       setIsLoading(true);
+      setAgentMessage("");
+      greetingTargetMessageRef.current = "";
+      updateGreetingDisplayMessage("");
       setErrorMessage(null);
+      clearGreetingFinishTimer();
+      clearGreetingWordTimer();
+      greetingGateRef.current = createInspectionGreetingGate();
+      initialStepInstructionSentRef.current = false;
+      setIsGreetingActive(true);
 
       try {
         const [jockeyProfile, voiceConfig] = await Promise.all([
@@ -126,14 +270,47 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
     return () => {
       mounted = false;
+      clearGreetingFinishTimer();
+      clearGreetingWordTimer();
       void voiceDriver.disconnect();
     };
-  }, [sessionId, voiceDriver]);
+  }, [
+    clearGreetingFinishTimer,
+    clearGreetingWordTimer,
+    sessionId,
+    updateGreetingDisplayMessage,
+    voiceDriver,
+  ]);
 
   useEffect(() => {
     setAnalysis(null);
     setFrameIndex(0);
   }, [activeStep?.id]);
+
+  useEffect(() => {
+    if (
+      isLoading ||
+      isGreetingActive ||
+      !session ||
+      !activeStep ||
+      initialStepInstructionSentRef.current
+    ) {
+      return;
+    }
+
+    initialStepInstructionSentRef.current = true;
+    const activeStepIndex = session.plan.steps.findIndex(
+      (step) => step.id === activeStep.id,
+    );
+    const instruction = getInspectionStepVoiceInstruction(
+      activeStep,
+      Math.max(0, activeStepIndex),
+    );
+    setAgentMessage(instruction);
+    void voiceDriver.sendAgentMessage(instruction).catch((error) => {
+      setErrorMessage(getInspectionErrorMessage(error));
+    });
+  }, [activeStep, isGreetingActive, isLoading, session, voiceDriver]);
 
   async function handleAnalyzeFrame() {
     if (!activeStep || !currentFrame || isBusy) {
@@ -268,12 +445,12 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     }
   }
 
-  if (isLoading) {
-    return <LoadingInspectionView message="Starting Pipecat copilot" />;
-  }
-
   if (errorMessage && !session) {
     return <InspectionUnavailableView message={errorMessage} />;
+  }
+
+  if (isLoading || isGreetingActive) {
+    return <InspectionGreetingView message={greetingDisplayMessage} />;
   }
 
   if (!session) {

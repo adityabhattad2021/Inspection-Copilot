@@ -54,8 +54,10 @@ def test_start_session_marks_first_step_active_and_returns_agent_greeting():
     assert body["session"]["status"] == "active"
     assert body["activeStep"]["id"] == "front-main"
     assert body["session"]["plan"]["steps"][0]["status"] == "active"
+    assert "Aditya" in body["agentMessage"]
+    assert "Saarthi" in body["agentMessage"]
     assert "2020 Hyundai Creta" in body["agentMessage"]
-    assert "Front Main" in body["agentMessage"]
+    assert "Front Main" not in body["agentMessage"]
 
 
 def test_live_frame_analysis_returns_guidance_and_records_intervention():
