@@ -12,7 +12,7 @@ The backend demo deployment is an EC2-hosted FastAPI Docker service backed by Dy
 | Navigation | Expo Router | Small route surface: onboarding, lookup, vehicle confirmation, inspection |
 | Camera | Pipecat Small WebRTC local camera track rendered with `RTCView` | The realtime voice session owns camera/mic transport, and the app captures the visible RTC view when needed |
 | Frame capture | Android native `RealtimeFrameCaptureModule` | Captures the rendered realtime camera frame as a JPEG for photo review and evidence |
-| Backend hosting | FastAPI in Docker on EC2 | Simple deployed backend at `http://65.0.101.246`, no Lambda/Mangum/API Gateway in the current deployment |
+| Backend hosting | FastAPI in Docker on EC2 | Simple deployed backend service, no Lambda/Mangum/API Gateway in the current deployment |
 | Persistence | DynamoDB backend adapter | EC2 service remains stateless; session, plan, evidence metadata, observations, interventions, profiles, and reports live in DynamoDB |
 | Media storage | S3 evidence bucket | Stores photo evidence when `JOCKEY_COPILOT_S3_BUCKET` is configured; presigned uploads are also available |
 | Voice runtime | Pipecat Small WebRTC backend bot | Keeps realtime LLM keys on the backend and streams voice/camera through the backend-controlled runtime |
@@ -23,35 +23,21 @@ The backend demo deployment is an EC2-hosted FastAPI Docker service backed by Dy
 ## Deployment Architecture
 
 ```mermaid
-flowchart TB
-  Dev["Developer laptop"] --> DeployScript["deploy/aws/deploy-backend.sh"]
-  DeployScript -->|rsync backend + deploy files| EC2Host["EC2 instance<br/>65.0.101.246"]
-
-  subgraph EC2["EC2 backend host"]
-    Compose["docker-compose"]
-    Container["backend container<br/>FastAPI + uvicorn<br/>port 8000"]
-    Env["deploy/.env.aws<br/>runtime secrets and AWS config"]
-  end
+flowchart LR
+  Mobile["Mobile app"] -->|REST + Small WebRTC| Backend["FastAPI Docker service<br/>on EC2"]
 
   subgraph AWS["AWS managed storage"]
-    DDB["DynamoDB table<br/>JOCKEY_COPILOT_DDB_TABLE"]
-    S3["S3 evidence bucket<br/>JOCKEY_COPILOT_S3_BUCKET"]
+    DDB["DynamoDB<br/>inspection state"]
+    S3["S3<br/>photo evidence"]
   end
 
-  subgraph AI["Realtime AI providers"]
-    Gemini["Gemini Live<br/>default"]
-    OpenAI["OpenAI Realtime<br/>rollback option"]
+  subgraph AI["Realtime AI"]
+    Provider["Gemini Live by default<br/>OpenAI Realtime fallback"]
   end
 
-  Android["Android dev client / APK"] -->|HTTP REST + Small WebRTC signaling| Container
-  EC2Host --> Compose
-  Compose --> Container
-  Env --> Container
-  Container -->|boto3 database adapter| DDB
-  Container -->|boto3 object upload / presign| S3
-  Container -->|Pipecat realtime session| Gemini
-  Container -->|optional provider switch| OpenAI
-  Container -->|GET /health| Health["Health check"]
+  Backend --> DDB
+  Backend --> S3
+  Backend --> Provider
 ```
 
 ## System Architecture
