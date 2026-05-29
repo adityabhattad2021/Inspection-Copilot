@@ -2,7 +2,13 @@ import type { PropsWithChildren } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import { Text, View } from "react-native";
 
-import { colors, radius, spacing, typography } from "@/src/components/ui";
+import {
+  colors,
+  fontFamilies,
+  radius,
+  spacing,
+  typography,
+} from "@/src/components/ui";
 
 type RegistrationPlateSize = "compact" | "large";
 
@@ -22,6 +28,7 @@ const plateSizes = {
     borderWidth: 1.5,
     fontSize: 13,
     indFontSize: 9,
+    maxWidth: 220,
     minHeight: 36,
     prefixWidth: 34,
   },
@@ -29,6 +36,7 @@ const plateSizes = {
     borderWidth: 2,
     fontSize: 24,
     indFontSize: 14,
+    maxWidth: 328,
     minHeight: 70,
     prefixWidth: 62,
   },
@@ -58,15 +66,17 @@ export function RegistrationPlateShell({
       style={[
         {
           alignItems: "stretch",
-          alignSelf: "stretch",
+          alignSelf: "center",
           backgroundColor: colors.white,
           borderColor: colors.text,
           borderCurve: "continuous",
           borderRadius: radius.md,
           borderWidth: sizeStyle.borderWidth,
           flexDirection: "row",
+          maxWidth: sizeStyle.maxWidth,
           minHeight: sizeStyle.minHeight,
           overflow: "hidden",
+          width: "100%",
         },
         style,
       ]}
@@ -86,8 +96,8 @@ export function RegistrationPlateShell({
             typography.small,
             {
               color: colors.white,
+              fontFamily: fontFamilies.label,
               fontSize: sizeStyle.indFontSize,
-              fontWeight: "900",
             },
           ]}
         >
@@ -123,9 +133,9 @@ export function RegistrationPlateText({
           selectable
           style={{
             color: colors.text,
+            fontFamily: fontFamilies.plate,
             fontSize: sizeStyle.fontSize,
             fontVariant: ["tabular-nums"],
-            fontWeight: "900",
             letterSpacing: 0,
             lineHeight: sizeStyle.fontSize + 8,
             textAlign: "center",

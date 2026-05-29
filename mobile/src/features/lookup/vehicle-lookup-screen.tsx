@@ -8,6 +8,7 @@ import { ApiError } from "@/src/api/client";
 import {
   Button,
   colors,
+  fontFamilies,
   radius,
   spacing,
   typography,
@@ -28,9 +29,22 @@ type VehicleLookupScreenProps = {
 
 const DEMO_REGISTRATION_NUMBER = "KA03MX2147";
 export const LOOKUP_SCREEN_LAYOUT = {
+  chrome: "inline-inspection-console",
   input: "ind-number-plate",
-  mode: "greeting-centered-plate-inline",
+  mode: "greeting-inline-console",
 } as const;
+
+const CONSOLE_SIGNALS = [
+  { label: "RC lookup", value: "ready" },
+  { label: "AI plan", value: "queued" },
+  { label: "voice", value: "online" },
+] as const;
+
+const DEMO_FLOW_STEPS = [
+  "Profile match",
+  "SUV inspection plan",
+  "5-step demo route",
+] as const;
 
 function toUserMessage(error: unknown) {
   if (error instanceof ApiError) {
@@ -114,13 +128,13 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
               typography.title,
               {
                 color: colors.textMuted,
+                fontFamily: fontFamilies.label,
                 fontSize: 24,
-                fontWeight: "700",
                 lineHeight: 30,
               },
-          ]}
-        >
-            Hello
+            ]}
+          >
+            Hello,
           </Text>
           <Text
             adjustsFontSizeToFit
@@ -185,7 +199,7 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
       <View
         style={{
           flex: 1,
-          paddingTop: spacing.xl,
+          paddingTop: spacing.lg,
         }}
       >
         <View
@@ -196,11 +210,43 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
         >
           <View
             style={{
-              gap: spacing.xxl + spacing.xs,
+              gap: spacing.lg,
               justifyContent: "center",
             }}
           >
-            <View style={{ gap: spacing.xs }}>
+            <View
+              style={{
+                alignItems: "center",
+                flexDirection: "row",
+                gap: spacing.xs,
+                justifyContent: "flex-start",
+              }}
+            >
+              <View
+                style={{
+                  alignItems: "center",
+                  flexDirection: "row",
+                  gap: spacing.xs,
+                }}
+              >
+                <View
+                  style={{
+                    backgroundColor: colors.ai,
+                    borderRadius: radius.pill,
+                    height: 8,
+                    width: 8,
+                  }}
+                />
+                <Text
+                  selectable
+                  style={[typography.small, { color: colors.aiText }]}
+                >
+                  COPILOT READY
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ gap: spacing.sm }}>
               <Text
                 adjustsFontSizeToFit
                 minimumFontScale={0.82}
@@ -209,12 +255,19 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
                 style={[
                   typography.title,
                   {
+                    color: colors.text,
                     fontSize: 28,
                     lineHeight: 36,
                   },
                 ]}
               >
-                Enter the Registration Number
+                Scan registration
+              </Text>
+              <Text
+                selectable
+                style={[typography.subtitle, { color: colors.textMuted }]}
+              >
+                Vehicle profile / AI checklist / Voice route
               </Text>
             </View>
 
@@ -233,9 +286,9 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
                       backgroundColor: colors.white,
                       color: colors.text,
                       flex: 1,
+                      fontFamily: fontFamilies.plate,
                       fontSize: 24,
                       fontVariant: ["tabular-nums"],
-                      fontWeight: "900",
                       letterSpacing: 0,
                       minHeight: 70,
                       paddingHorizontal: spacing.md,
@@ -263,6 +316,84 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
                   {errorMessage}
                 </Text>
               ) : null}
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: spacing.xs,
+              }}
+            >
+              {CONSOLE_SIGNALS.map((signal) => (
+                <View
+                  key={signal.label}
+                  style={{
+                    backgroundColor: colors.aiSoft,
+                    borderColor: colors.ai,
+                    borderRadius: radius.pill,
+                    borderWidth: 1,
+                    flexDirection: "row",
+                    gap: spacing.xxs,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                  }}
+                >
+                  <Text
+                    selectable
+                    style={[typography.small, { color: colors.aiText }]}
+                  >
+                    {signal.label}
+                  </Text>
+                  <Text
+                    selectable
+                    style={[typography.small, { color: colors.textMuted }]}
+                  >
+                    {signal.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <View
+              style={{
+                gap: spacing.xs,
+              }}
+            >
+              {DEMO_FLOW_STEPS.map((step, index) => (
+                <View
+                  key={step}
+                  style={{
+                    alignItems: "center",
+                    flexDirection: "row",
+                    gap: spacing.sm,
+                  }}
+                >
+                  <Text
+                    selectable
+                    style={[typography.small, { color: colors.aiText }]}
+                  >
+                    0{index + 1}
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: colors.ai,
+                      borderRadius: radius.pill,
+                      height: 5,
+                      width: 5,
+                    }}
+                  />
+                  <Text
+                    selectable
+                    style={[
+                      typography.small,
+                      { color: colors.textMuted, flex: 1 },
+                    ]}
+                  >
+                    {step}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         </View>

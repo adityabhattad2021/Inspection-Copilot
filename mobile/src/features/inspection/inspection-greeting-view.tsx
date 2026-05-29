@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { colors, spacing } from "@/src/components/ui";
+import { colors, spacing, typography } from "@/src/components/ui";
 import { LiveWaveform } from "@/src/features/inspection/live-waveform";
 
 type InspectionGreetingViewProps = {
@@ -28,17 +28,17 @@ export function InspectionGreetingView({ message }: InspectionGreetingViewProps)
       {hasMessage ? (
         <Text
           selectable
-          style={{
-            alignSelf: "center",
-            color: colors.text,
-            fontSize: 30,
-            fontWeight: "800",
-            letterSpacing: 0,
-            lineHeight: 38,
-            maxWidth: 350,
-            textAlign: "left",
-            width: "100%",
-          }}
+          style={[
+            typography.title,
+            {
+              alignSelf: "center",
+              fontSize: 30,
+              lineHeight: 38,
+              maxWidth: 350,
+              textAlign: "left",
+              width: "100%",
+            },
+          ]}
         >
           {displayMessage}
         </Text>

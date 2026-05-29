@@ -8,6 +8,7 @@ export function lookupScreenLayoutContract() {
     foundHero: VEHICLE_FOUND_SCREEN_LAYOUT.hero,
     foundModelAnimation: VEHICLE_FOUND_SCREEN_LAYOUT.modelAnimation,
     foundRegistrationPlate: VEHICLE_FOUND_SCREEN_LAYOUT.registrationPlate,
+    lookupChrome: LOOKUP_SCREEN_LAYOUT.chrome,
     lookupInput: LOOKUP_SCREEN_LAYOUT.input,
     lookup: LOOKUP_SCREEN_LAYOUT.mode,
   };

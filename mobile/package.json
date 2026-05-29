@@ -16,6 +16,7 @@
     "@daily-co/config-plugin-rn-daily-js": "0.0.11",
     "@daily-co/react-native-daily-js": "0.82.0",
     "@daily-co/react-native-webrtc": "124.0.6-daily.1",
+    "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@pipecat-ai/client-js": "1.7.0",
     "@pipecat-ai/react-native-daily-media-manager": "0.0.1",

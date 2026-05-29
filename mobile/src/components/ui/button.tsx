@@ -2,7 +2,13 @@ import type { ReactNode } from "react";
 import type { StyleProp, TextStyle, ViewStyle } from "react-native";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
-import { colors, radius, spacing, typography } from "@/src/components/ui/theme";
+import {
+  colors,
+  radius,
+  shadows,
+  spacing,
+  typography,
+} from "@/src/components/ui/theme";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "md" | "lg";
@@ -22,7 +28,7 @@ type ButtonProps = {
 const variantStyles = {
   primary: {
     backgroundColor: colors.ai,
-    borderColor: colors.ai,
+    borderColor: colors.aiText,
   },
   secondary: {
     backgroundColor: colors.camera,
@@ -47,16 +53,27 @@ const labelColors = {
 
 const sizeStyles = {
   md: {
-    minHeight: 48,
+    minHeight: 52,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
   lg: {
-    minHeight: 56,
+    minHeight: 64,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
 } satisfies Record<ButtonSize, ViewStyle>;
+
+const labelSizeStyles = {
+  md: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  lg: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+} satisfies Record<ButtonSize, TextStyle>;
 
 export function Button({
   disabled,
@@ -81,7 +98,7 @@ export function Button({
           alignItems: "center",
           borderCurve: "continuous",
           borderRadius: radius.md,
-          borderWidth: 1,
+          borderWidth: 1.5,
           flexDirection: "row",
           gap: spacing.xs,
           justifyContent: "center",
@@ -89,6 +106,7 @@ export function Button({
         },
         variantStyles[variant],
         sizeStyles[size],
+        variant === "primary" && !isDisabled ? shadows.lift : null,
         pressed && !isDisabled
           ? {
               transform: [{ scale: 0.98 }],
@@ -115,6 +133,7 @@ export function Button({
                 flexShrink: 1,
                 textAlign: "center",
               },
+              labelSizeStyles[size],
               textStyle,
             ]}
           >

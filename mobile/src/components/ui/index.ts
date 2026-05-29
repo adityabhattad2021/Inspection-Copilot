@@ -5,6 +5,7 @@ export { StatusPill } from "@/src/components/ui/status-pill";
 export { StepHeader } from "@/src/components/ui/step-header";
 export {
   colors,
+  fontFamilies,
   radius,
   shadows,
   spacing,

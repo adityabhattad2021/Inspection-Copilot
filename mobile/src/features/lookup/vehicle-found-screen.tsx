@@ -391,6 +391,7 @@ export function VehicleFoundScreen({
         <Button
           label="Change registration"
           onPress={() => router.back()}
+          size="lg"
           variant="ghost"
         />
       </Animated.ScrollView>

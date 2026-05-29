@@ -43,47 +43,56 @@ export const radius = {
   pill: 999,
 } as const;
 
+export const fontFamilies = {
+  body: "JetBrainsMono_400Regular",
+  bodyMedium: "JetBrainsMono_500Medium",
+  display: "JetBrainsMono_700Bold",
+  label: "JetBrainsMono_600SemiBold",
+  plate: "JetBrainsMono_700Bold",
+  small: "JetBrainsMono_500Medium",
+} as const;
+
 export const typography = {
   eyebrow: {
     color: colors.textMuted,
+    fontFamily: fontFamilies.label,
     fontSize: 12,
-    fontWeight: "700",
     letterSpacing: 0,
     lineHeight: 16,
     textTransform: "uppercase",
   },
   title: {
     color: colors.text,
+    fontFamily: fontFamilies.display,
     fontSize: 22,
-    fontWeight: "800",
     letterSpacing: 0,
     lineHeight: 28,
   },
   subtitle: {
     color: colors.textMuted,
+    fontFamily: fontFamilies.body,
     fontSize: 15,
-    fontWeight: "500",
     letterSpacing: 0,
     lineHeight: 22,
   },
   body: {
     color: colors.text,
+    fontFamily: fontFamilies.body,
     fontSize: 15,
-    fontWeight: "500",
     letterSpacing: 0,
     lineHeight: 21,
   },
   label: {
     color: colors.text,
+    fontFamily: fontFamilies.label,
     fontSize: 13,
-    fontWeight: "700",
     letterSpacing: 0,
     lineHeight: 18,
   },
   small: {
     color: colors.textMuted,
+    fontFamily: fontFamilies.small,
     fontSize: 12,
-    fontWeight: "600",
     letterSpacing: 0,
     lineHeight: 16,
   },

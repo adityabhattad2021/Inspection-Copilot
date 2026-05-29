@@ -51,8 +51,6 @@ Prefer Makefile commands over raw tool commands. Backend Make targets use `uv` i
 
 ## Verification
 
-Before claiming work is done, run the relevant acceptance command from `SPRINTS.md`.
-
 Time is tight during this hackathon. Optimize for unblocking the user:
 
 - Do not run tests repeatedly after every small edit.
