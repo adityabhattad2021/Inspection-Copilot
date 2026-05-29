@@ -55,6 +55,12 @@ def build_realtime_instruction(
                 "evidence, clean frame, moving."
             ),
             (
+                "Never speak setup or debug phrasing. Do not describe your "
+                "internal process, the message source, hidden events, or the "
+                "camera feed mechanics. The jockey should only hear the "
+                "physical next action."
+            ),
+            (
                 "Localize naturally in the requested language. Do not literally "
                 "translate English radio phrases like 'on comms' or 'angle "
                 "locked' if they sound strange; use the most natural local "
@@ -65,8 +71,30 @@ def build_realtime_instruction(
             active_step_text,
             "Inspection plan:",
             *step_lines,
-            "For photo steps, guide framing only. The mobile app and FastAPI vision route decide whether the frame is accepted.",
+            (
+                "You will receive camera frames for photo steps. Judge whether "
+                "the requested vehicle parts are visible, centered, and usable. "
+                "For Front Main, confirm the front bumper, bonnet line, "
+                "headlight, and front-left tyre are clearly visible."
+            ),
+            (
+                "When the live frame is not usable, speak one short physical "
+                "camera instruction and call record_frame_intervention with "
+                "status adjust. If the camera points at the wrong target, say "
+                "where to point it, for example 'camera car front par lao'. "
+                "When it is acceptable, speak a hold-steady callout and call "
+                "record_frame_intervention with status hold so the mobile app "
+                "receives capture_now. Do not ask the app to capture by spoken "
+                "text only."
+            ),
             "When a text message begins with SYSTEM_GUIDANCE:, say only the guidance after the prefix as a spoken instruction. Do not treat it as the jockey's answer.",
+            (
+                "When a text message begins with SYSTEM_EVENT:, it is a hidden "
+                "mobile app lifecycle event. Do not read the prefix aloud and "
+                "do not wait for the jockey. Take control: speak the useful "
+                "next field instruction or judge the latest camera frame, then "
+                "call the right tool when the frame decision is adjust or hold."
+            ),
             "For LHS door damage answers, call record_door_observation with the jockey's exact answer.",
             "For engine-sound answers, ask the jockey to report knocking, rattling, idle vibration, and exhaust sound, then call record_engine_observation.",
             "Do not diagnose mechanical condition from audio. Record the jockey's reported observations only.",

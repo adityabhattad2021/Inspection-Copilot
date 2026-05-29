@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +15,7 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def isolated_sqlite_db(monkeypatch, tmp_path):
     monkeypatch.setenv("JOCKEY_COPILOT_DB_PATH", str(tmp_path / "inspection.db"))
+    monkeypatch.setenv("JOCKEY_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
     clear_database()
     seed_database()
 
@@ -150,6 +152,68 @@ def test_photo_evidence_accepts_step_and_advances_to_lhs_door():
         ).fetchone()
 
     assert row == ("front-main", "photo", "sample://front-main-good", 1)
+
+
+def test_photo_evidence_upload_stores_image_bytes_and_records_local_file():
+    session_id = _create_session()
+    client.post(f"/sessions/{session_id}/start", json={})
+
+    image_bytes = b"\xff\xd8\xff\xe0demo-jpeg-bytes\xff\xd9"
+    response = client.post(
+        "/evidence/photo",
+        data={
+            "sessionId": session_id,
+            "stepId": "front-main",
+            "sampleKey": "front-main-realtime",
+        },
+        files={"image": ("front-main.jpg", image_bytes, "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["accepted"] is True
+
+    evidence_path = (
+        Path(os.environ["JOCKEY_COPILOT_EVIDENCE_DIR"])
+        / "sessions"
+        / session_id
+        / "photos"
+        / "front-main.jpg"
+    )
+    assert evidence_path.read_bytes() == image_bytes
+
+    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+        row = connection.execute(
+            """
+            SELECT object_key, local_uri, metadata_json
+            FROM evidence_items
+            WHERE session_id = ?
+            """,
+            (session_id,),
+        ).fetchone()
+
+    assert row[0] == f"sessions/{session_id}/photos/front-main.jpg"
+    assert row[1] == str(evidence_path)
+    assert f'"imageBytes": {len(image_bytes)}' in row[2]
+    assert '"imageMimeType": "image/jpeg"' in row[2]
+
+
+def test_realtime_photo_evidence_requires_uploaded_image():
+    session_id = _create_session()
+    client.post(f"/sessions/{session_id}/start", json={})
+
+    response = client.post(
+        "/evidence/photo",
+        json={
+            "sessionId": session_id,
+            "stepId": "front-main",
+            "sampleKey": "front-main-realtime",
+            "localUri": "realtime://front-main/123",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Realtime photo evidence requires an image upload"
 
 
 def test_structure_observation_saves_lhs_door_damage_and_advances():

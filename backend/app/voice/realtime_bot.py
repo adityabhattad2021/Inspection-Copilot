@@ -1,9 +1,11 @@
 import os
 from typing import Any
 
+from loguru import logger
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.processors.frameworks.rtvi import RTVIObserverParams
 from pipecat.services.openai.realtime import events
+from pipecat.transports.base_transport import TransportParams
 
 from app.database import load_session_payload
 from app.voice.config import get_voice_runtime_config
@@ -17,6 +19,9 @@ LANGUAGE_TRANSCRIPTION_CODES = {
     "hinglish": "hi",
     "kn-IN": "kn",
 }
+INSPECTION_CONTROL_ACK_TYPE = "inspection_control_ack"
+INSPECTION_CONTROL_ERROR_TYPE = "inspection_control_error"
+INSPECTION_CONTROL_PREVIEW_LENGTH = 180
 
 
 def _runner_body(runner_args: Any) -> dict[str, Any]:
@@ -88,8 +93,46 @@ def build_initial_realtime_messages(instruction: str) -> list[dict[str, str]]:
     ]
 
 
+def build_realtime_text_events(
+    content: str,
+) -> tuple[events.ConversationItemCreateEvent, events.ResponseCreateEvent]:
+    item_event = events.ConversationItemCreateEvent(
+        item=events.ConversationItem(
+            role="user",
+            type="message",
+            content=[events.ItemContent(type="input_text", text=content)],
+        ),
+    )
+    return item_event, events.ResponseCreateEvent()
+
+
+def build_inspection_control_ack(content: str) -> dict[str, Any]:
+    return {
+        "contentPreview": content[:INSPECTION_CONTROL_PREVIEW_LENGTH],
+        "received": True,
+        "type": INSPECTION_CONTROL_ACK_TYPE,
+    }
+
+
+def build_inspection_control_error(error: str) -> dict[str, Any]:
+    return {
+        "error": error,
+        "type": INSPECTION_CONTROL_ERROR_TYPE,
+    }
+
+
 def build_voice_rtvi_observer_params() -> RTVIObserverParams:
     return RTVIObserverParams(user_llm_enabled=False)
+
+
+def build_voice_transport_params() -> TransportParams:
+    return TransportParams(
+        audio_in_enabled=True,
+        audio_out_enabled=True,
+        audio_in_sample_rate=24000,
+        audio_out_sample_rate=24000,
+        video_in_enabled=True,
+    )
 
 
 async def bot(runner_args: Any):
@@ -100,7 +143,6 @@ async def bot(runner_args: Any):
     from pipecat.processors.frameworks.rtvi import RTVIProcessor
     from pipecat.processors.aggregators.llm_context import LLMContext
     from pipecat.services.openai.realtime.llm import OpenAIRealtimeLLMService
-    from pipecat.transports.base_transport import TransportParams
     from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -131,27 +173,35 @@ async def bot(runner_args: Any):
 
     transport = SmallWebRTCTransport(
         runner_args.webrtc_connection,
-        params=TransportParams(
-            audio_in_enabled=True,
-            audio_out_enabled=True,
-            audio_in_sample_rate=24000,
-            audio_out_sample_rate=24000,
-        ),
+        params=build_voice_transport_params(),
     )
     llm = OpenAIRealtimeLLMService(
         api_key=api_key,
         model=runtime.model,
         session_properties=session_properties,
+        video_frame_detail="low",
     )
-    for name, handler in build_voice_function_handlers(session_id).items():
-        llm.register_function(name, handler)
-
     context = LLMContext(
         messages=build_initial_realtime_messages(instruction),
         tools=tools,
         tool_choice="auto",
     )
     rtvi = RTVIProcessor(transport=transport)
+
+    async def send_capture_command(command: dict[str, Any]) -> None:
+        await rtvi.send_server_message(command)
+
+    async def inject_realtime_user_text(content: str) -> None:
+        item_event, response_event = build_realtime_text_events(content)
+        await llm.send_client_event(item_event)
+        await llm.send_client_event(response_event)
+
+    for name, handler in build_voice_function_handlers(
+        session_id,
+        on_capture_command=send_capture_command,
+    ).items():
+        llm.register_function(name, handler)
+
     pipeline = Pipeline([transport.input(), llm, transport.output()])
     task = PipelineTask(
         pipeline,
@@ -174,6 +224,47 @@ async def bot(runner_args: Any):
             return
         has_queued_initial_context = True
         await task.queue_frame(LLMContextFrame(context=context))
+
+    @rtvi.event_handler("on_client_message")
+    async def on_client_message(_, message):
+        if message.type != "inspection-control":
+            logger.debug(
+                "Ignoring RTVI client message type={} session_id={}",
+                message.type,
+                session_id,
+            )
+            return
+
+        data = message.data if isinstance(message.data, dict) else {}
+        content = data.get("content")
+        if not isinstance(content, str) or not content.strip():
+            logger.warning(
+                "Received empty inspection-control message session_id={} data={}",
+                session_id,
+                data,
+            )
+            return
+
+        cleaned_content = content.strip()
+        logger.info(
+            "Received inspection-control session_id={} preview={!r}",
+            session_id,
+            cleaned_content[:INSPECTION_CONTROL_PREVIEW_LENGTH],
+        )
+        await rtvi.send_server_message(build_inspection_control_ack(cleaned_content))
+        try:
+            await inject_realtime_user_text(cleaned_content)
+            logger.info(
+                "Injected inspection-control into OpenAI Realtime session_id={}",
+                session_id,
+            )
+        except Exception as exc:
+            logger.exception(
+                "Failed to inject inspection-control session_id={}",
+                session_id,
+            )
+            await rtvi.send_server_message(build_inspection_control_error(str(exc)))
+            raise
 
     runner = PipelineRunner()
     await runner.run(task)

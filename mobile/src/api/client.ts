@@ -171,6 +171,37 @@ async function requestJson<TResponse>(
   return response.json() as Promise<TResponse>;
 }
 
+async function requestFormJson<TResponse>(
+  path: string,
+  body: FormData,
+): Promise<TResponse> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      body,
+      headers: {
+        Accept: "application/json",
+      },
+      method: "POST",
+    });
+  } catch {
+    throw new ApiError("Network request failed", 0, "NETWORK_ERROR");
+  }
+
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => undefined);
+    const message =
+      typeof errorPayload?.detail === "string"
+        ? errorPayload.detail
+        : `Request failed with status ${response.status}`;
+
+    throw new ApiError(message, response.status, "HTTP_ERROR");
+  }
+
+  return response.json() as Promise<TResponse>;
+}
+
 function toSavedJockeyProfile(payload: ProfileResponse): SavedJockeyProfile {
   if (!isInstructionLanguageCode(payload.languageCode)) {
     throw new ApiError(
@@ -267,11 +298,29 @@ export async function analyzeLiveFrame(request: {
 }
 
 export async function savePhotoEvidence(request: {
+  image?: {
+    name: string;
+    type: "image/jpeg";
+    uri: string;
+  };
   sessionId: string;
   stepId: string;
   sampleKey: string;
   localUri?: string;
 }): Promise<PhotoEvidenceResponse> {
+  if (request.image) {
+    const formData = new FormData();
+    formData.append("sessionId", request.sessionId);
+    formData.append("stepId", request.stepId);
+    formData.append("sampleKey", request.sampleKey);
+    if (request.localUri) {
+      formData.append("localUri", request.localUri);
+    }
+    formData.append("image", request.image as unknown as Blob);
+
+    return requestFormJson<PhotoEvidenceResponse>("/evidence/photo", formData);
+  }
+
   return requestJson<PhotoEvidenceResponse>("/evidence/photo", {
     body: JSON.stringify(request),
     method: "POST",

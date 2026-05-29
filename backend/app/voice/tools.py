@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from app.database import (
     complete_step_and_activate_next,
     count_completed_steps,
     load_session_payload,
+    save_ai_intervention,
     save_structured_observation,
     set_session_status,
 )
@@ -57,6 +59,76 @@ def _next_step(session: SessionResponse, step_id: str | None) -> dict[str, Any] 
         return None
     step = next((step for step in session.plan.steps if step.id == step_id), None)
     return None if step is None else step.model_dump(by_alias=True)
+
+
+def _normalize_parts(parts: Any) -> list[str]:
+    if not isinstance(parts, list):
+        return []
+    return [str(part).strip() for part in parts if str(part).strip()]
+
+
+def record_frame_intervention(
+    *,
+    session_id: str,
+    step_id: str,
+    status: str,
+    guidance: str,
+    confidence: float | None = None,
+    visible_parts: list[str] | None = None,
+    missing_parts: list[str] | None = None,
+) -> dict[str, Any]:
+    session = _load_session(session_id)
+    step = _session_step(session, step_id)
+    if step.kind != "photo":
+        raise HTTPException(
+            status_code=422,
+            detail="Frame intervention can only be recorded for photo steps",
+        )
+
+    normalized_status = status.strip().lower()
+    if normalized_status not in {"adjust", "hold"}:
+        raise HTTPException(
+            status_code=422,
+            detail="Frame intervention status must be adjust or hold",
+        )
+
+    message = guidance.strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="Frame guidance is required")
+
+    payload = {
+        "source": "saarthi-realtime",
+        "status": normalized_status,
+        "visibleParts": visible_parts or [],
+        "missingParts": missing_parts or [],
+    }
+    now = _utc_now()
+    save_ai_intervention(
+        intervention_id=f"ai_{uuid4().hex[:12]}",
+        session_id=session_id,
+        step_id=step.id,
+        intervention_type=f"realtime_frame_{normalized_status}",
+        message=message,
+        confidence=0.0 if confidence is None else float(confidence),
+        payload=payload,
+        created_at=now,
+    )
+
+    capture_command = (
+        {
+            "command": "capture_now",
+            "stepId": step.id,
+        }
+        if normalized_status == "hold"
+        else None
+    )
+    return {
+        "type": "frame_intervention",
+        "status": normalized_status,
+        "message": message,
+        "readyToCapture": normalized_status == "hold",
+        "captureCommand": capture_command,
+    }
 
 
 def _record_damage_observation(
@@ -172,6 +244,11 @@ def complete_voice_inspection(session_id: str) -> dict[str, Any]:
 
 
 def build_voice_tools() -> ToolsSchema:
+    parts_property = {
+        "description": "Visible or missing vehicle parts named by the live frame judge.",
+        "items": {"type": "string"},
+        "type": "array",
+    }
     transcript_property = {
         "description": "Exact answer spoken by the jockey.",
         "type": "string",
@@ -182,6 +259,37 @@ def build_voice_tools() -> ToolsSchema:
     }
     return ToolsSchema(
         standard_tools=[
+            FunctionSchema(
+                name="record_frame_intervention",
+                description=(
+                    "Record Saarthi's live camera-frame judgment. Use status "
+                    "adjust when required parts are missing or cropped. Use "
+                    "status hold only when the photo step is framed well enough "
+                    "for the mobile app to capture."
+                ),
+                properties={
+                    "stepId": {
+                        "description": "Current photo inspection step id.",
+                        "type": "string",
+                    },
+                    "status": {
+                        "description": "Frame decision: adjust or hold.",
+                        "enum": ["adjust", "hold"],
+                        "type": "string",
+                    },
+                    "guidance": {
+                        "description": "Short spoken guidance for the jockey.",
+                        "type": "string",
+                    },
+                    "confidence": {
+                        "description": "Model confidence between 0 and 1.",
+                        "type": "number",
+                    },
+                    "visibleParts": parts_property,
+                    "missingParts": parts_property,
+                },
+                required=["stepId", "status", "guidance"],
+            ),
             FunctionSchema(
                 name="record_door_observation",
                 description="Save a spoken LHS door damage answer to the inspection.",
@@ -210,7 +318,31 @@ def build_voice_tools() -> ToolsSchema:
     )
 
 
-def build_voice_function_handlers(session_id: str):
+def build_voice_function_handlers(
+    session_id: str,
+    on_capture_command: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+):
+    async def record_frame(params: FunctionCallParams):
+        arguments = params.arguments
+        result = record_frame_intervention(
+            session_id=session_id,
+            step_id=str(arguments.get("stepId") or arguments.get("step_id") or ""),
+            status=str(arguments.get("status") or ""),
+            guidance=str(arguments.get("guidance") or ""),
+            confidence=arguments.get("confidence"),
+            visible_parts=_normalize_parts(
+                arguments.get("visibleParts") or arguments.get("visible_parts"),
+            ),
+            missing_parts=_normalize_parts(
+                arguments.get("missingParts") or arguments.get("missing_parts"),
+            ),
+        )
+        await params.result_callback(result)
+
+        capture_command = result.get("captureCommand")
+        if capture_command and on_capture_command:
+            await on_capture_command(capture_command)
+
     async def record_observation(params: FunctionCallParams):
         transcript = str(params.arguments.get("transcript", "")).strip()
         step_id = params.arguments.get("stepId")
@@ -225,6 +357,7 @@ def build_voice_function_handlers(session_id: str):
         await params.result_callback(complete_voice_inspection(session_id))
 
     return {
+        "record_frame_intervention": record_frame,
         "record_door_observation": record_observation,
         "record_engine_observation": record_observation,
         "complete_inspection": complete_inspection,
