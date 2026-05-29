@@ -88,18 +88,6 @@ DEMO_PLAN_STEPS: list[dict[str, Any]] = [
         "sort_order": 1,
     },
     {
-        "step_id": "lhs-front-door",
-        "field_id": 45,
-        "field_name": "LHS front door",
-        "section": "Exterior & Tyres",
-        "kind": "photo",
-        "instructions": "Show the left front door and handle area clearly.",
-        "expected_parts": ["left front door", "door handle"],
-        "auto_capture_enabled": 1,
-        "auto_capture_hold_ms": PHOTO_HOLD_MS,
-        "sort_order": 2,
-    },
-    {
         "step_id": "rear-main",
         "field_id": 56,
         "field_name": "Rear Main",
@@ -109,7 +97,7 @@ DEMO_PLAN_STEPS: list[dict[str, Any]] = [
         "expected_parts": ["rear bumper", "boot line", "tail lamps"],
         "auto_capture_enabled": 1,
         "auto_capture_hold_ms": PHOTO_HOLD_MS,
-        "sort_order": 3,
+        "sort_order": 2,
     },
     {
         "step_id": "dashboard-odometer",
@@ -121,7 +109,7 @@ DEMO_PLAN_STEPS: list[dict[str, Any]] = [
         "expected_parts": ["dashboard", "instrument cluster", "odometer"],
         "auto_capture_enabled": 1,
         "auto_capture_hold_ms": PHOTO_HOLD_MS,
-        "sort_order": 4,
+        "sort_order": 3,
     },
     {
         "step_id": "engine-sound",
@@ -136,6 +124,6 @@ DEMO_PLAN_STEPS: list[dict[str, Any]] = [
         "expected_parts": [],
         "auto_capture_enabled": None,
         "auto_capture_hold_ms": None,
-        "sort_order": 5,
+        "sort_order": 4,
     },
 ]

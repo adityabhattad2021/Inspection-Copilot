@@ -380,6 +380,19 @@ def complete_step_and_activate_next(
     current = next((item for item in ordered if item["payload"]["id"] == step_id), None)
     if current is None:
         return None
+
+    if current["payload"]["status"] == "complete":
+        active_step = next(
+            (
+                item
+                for item in ordered
+                if item["sortOrder"] > current["sortOrder"]
+                and item["payload"]["status"] == "active"
+            ),
+            None,
+        )
+        return None if active_step is None else active_step["payload"]["id"]
+
     _put_step_item(current, status="complete")
 
     next_step = next(
@@ -496,6 +509,111 @@ def save_structured_observation(
             "createdAt": created_at,
         }
     )
+
+
+def list_evidence_items(session_id: str) -> list[dict[str, Any]]:
+    items = [
+        item
+        for item in _query_partition(_session_pk(session_id))
+        if item["entityType"] == "evidence"
+    ]
+    return [
+        {
+            "id": item["id"],
+            "stepId": item["stepId"],
+            "kind": item["kind"],
+            "objectKey": item.get("objectKey"),
+            "localUri": item.get("localUri"),
+            "qualityScore": item.get("qualityScore", 0.0),
+            "accepted": bool(item.get("accepted")),
+            "metadata": item.get("metadata", {}),
+            "createdAt": item["createdAt"],
+        }
+        for item in sorted(items, key=lambda item: (item["createdAt"], item["id"]))
+    ]
+
+
+def list_structured_observations(session_id: str) -> list[dict[str, Any]]:
+    items = [
+        item
+        for item in _query_partition(_session_pk(session_id))
+        if item["entityType"] == "structured_observation"
+    ]
+    return [
+        {
+            "id": item["id"],
+            "stepId": item["stepId"],
+            "fieldId": item["fieldId"],
+            "transcript": item.get("transcript"),
+            "issue": item.get("issue"),
+            "severity": item.get("severity"),
+            "confidence": item.get("confidence", 0.0),
+            "structuredFields": item.get("payload", {}),
+            "createdAt": item["createdAt"],
+        }
+        for item in sorted(items, key=lambda item: (item["createdAt"], item["id"]))
+    ]
+
+
+def list_ai_interventions(session_id: str) -> list[dict[str, Any]]:
+    items = [
+        item
+        for item in _query_partition(_session_pk(session_id))
+        if item["entityType"] == "ai_intervention"
+    ]
+    return [
+        {
+            "id": item["id"],
+            "stepId": item["stepId"],
+            "type": item["type"],
+            "message": item["message"],
+            "confidence": item.get("confidence", 0.0),
+            "payload": item.get("payload", {}),
+            "createdAt": item["createdAt"],
+        }
+        for item in sorted(items, key=lambda item: (item["createdAt"], item["id"]))
+    ]
+
+
+def save_report_payload(payload: dict[str, Any]) -> None:
+    _put_item(
+        {
+            "PK": _session_pk(payload["sessionId"]),
+            "SK": "REPORT",
+            "entityType": "report",
+            "reportId": payload["reportId"],
+            "sessionId": payload["sessionId"],
+            "status": payload["status"],
+            "completionScore": payload["completionScore"],
+            "mediaQualityScore": payload["mediaQualityScore"],
+            "pricingRisk": payload["pricingRisk"],
+            "reportJson": payload["reportJson"],
+            "reportHtmlPath": payload["reportHtmlPath"],
+            "createdAt": payload["createdAt"],
+            "updatedAt": payload["updatedAt"],
+        }
+    )
+
+
+def load_report_payload(session_id: str) -> dict[str, Any] | None:
+    item = _table().get_item(
+        Key={"PK": _session_pk(session_id), "SK": "REPORT"}
+    ).get("Item")
+    if item is None:
+        return None
+    payload = _from_dynamodb(item)
+    return {
+        "reportId": payload["reportId"],
+        "sessionId": payload["sessionId"],
+        "status": payload["status"],
+        "completionScore": payload["completionScore"],
+        "mediaQualityScore": payload["mediaQualityScore"],
+        "pricingRisk": payload["pricingRisk"],
+        "reportJson": payload["reportJson"],
+        "reportHtmlPath": payload["reportHtmlPath"],
+        "createdAt": payload["createdAt"],
+        "updatedAt": payload["updatedAt"],
+    }
 
 
 def save_profile_payload(payload: dict[str, Any]) -> None:

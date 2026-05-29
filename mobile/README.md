@@ -23,7 +23,7 @@ Expo React Native app for the Cars24 Jockey Copilot hackathon prototype. The app
    - Starts the backend inspection session.
    - Loads voice runtime configuration from `/voice/config`.
    - Runs the realtime voice-guided inspection screen.
-   - Captures accepted photo evidence, structures the LHS door observation, runs the guided engine check, and submits the session.
+   - Captures accepted photo evidence, runs the guided engine check, and submits the session.
 
 ## Main Mobile Surfaces
 
@@ -204,7 +204,7 @@ The release APK points at the deployed backend. The current backend is HTTP, so 
 3. Create or reuse a jockey profile.
 4. Look up `KA03MX2147`.
 5. Confirm the vehicle-found screen and start inspection.
-6. Follow realtime voice guidance for Front Main, LHS front door, Rear Main, Dashboard/Odometer, and Engine Sound.
+6. Follow realtime voice guidance for Front Main, Rear Main, Dashboard/Odometer, and Engine Sound.
 7. Submit the inspection when the engine check completes.
 
 The mobile app ends at submission and returns to lookup. External report generation is a backend/dashboard concern, not a mobile route in the current code.

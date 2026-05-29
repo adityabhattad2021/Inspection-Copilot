@@ -233,6 +233,12 @@ def _record_damage_observation(
     step: InspectionStep,
     transcript: str,
 ) -> dict[str, Any]:
+    if step.status != "needs_observation":
+        raise HTTPException(
+            status_code=400,
+            detail="Step does not require a spoken observation",
+        )
+
     fields = structure_observation(transcript)
     now = _utc_now()
     save_structured_observation(

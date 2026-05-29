@@ -144,6 +144,12 @@ def structure_observation_endpoint(
 ) -> StructureObservationResponse:
     session = _load_session(request.session_id)
     step = _session_step(session, request.step_id)
+    if step.status != "needs_observation":
+        raise HTTPException(
+            status_code=400,
+            detail="Step does not require a spoken observation",
+        )
+
     fields = structure_observation(request.transcript)
     now = _utc_now()
     observation_id = f"obs_{uuid4().hex[:12]}"

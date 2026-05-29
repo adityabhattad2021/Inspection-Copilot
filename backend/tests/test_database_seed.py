@@ -49,7 +49,7 @@ def test_seed_database_populates_mock_vehicles_and_plan(monkeypatch, tmp_path):
         ).fetchone()
 
     assert vehicles_count == (3,)
-    assert plan_steps_count == (5,)
+    assert plan_steps_count == (4,)
 
 
 def test_clear_database_removes_seed_data(monkeypatch, tmp_path):

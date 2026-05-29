@@ -121,7 +121,7 @@ def complete_step_and_activate_next(
     with connect_database() as connection:
         current = connection.execute(
             """
-            SELECT sort_order
+            SELECT sort_order, status
             FROM inspection_session_steps
             WHERE session_id = ?
                 AND step_id = ?
@@ -130,6 +130,21 @@ def complete_step_and_activate_next(
         ).fetchone()
         if current is None:
             return None
+
+        if current["status"] == "complete":
+            active_step = connection.execute(
+                """
+                SELECT step_id
+                FROM inspection_session_steps
+                WHERE session_id = ?
+                    AND sort_order > ?
+                    AND status = 'active'
+                ORDER BY sort_order
+                LIMIT 1
+                """,
+                (session_id, current["sort_order"]),
+            ).fetchone()
+            return None if active_step is None else active_step["step_id"]
 
         connection.execute(
             """

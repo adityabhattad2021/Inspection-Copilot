@@ -34,18 +34,6 @@ export const INSPECTION_STEP_MEDIA: readonly InspectionStepMedia[] = [
   {
     frames: [
       {
-        key: "lhs-door-scratch",
-        label: "Door mark",
-        note: "Left front door and handle area are visible.",
-        tone: "issue",
-      },
-    ],
-    observationTranscript: "Minor scratch near the handle, no dent.",
-    stepId: "lhs-front-door",
-  },
-  {
-    frames: [
-      {
         key: "rear-main-good",
         label: "Rear aligned",
         note: "Rear bumper, boot line, and tail lamps are visible.",

@@ -43,7 +43,7 @@ const CONSOLE_SIGNALS = [
 const DEMO_FLOW_STEPS = [
   "Profile match",
   "SUV inspection plan",
-  "5-step demo route",
+  "4-step demo route",
 ] as const;
 
 function toUserMessage(error: unknown) {

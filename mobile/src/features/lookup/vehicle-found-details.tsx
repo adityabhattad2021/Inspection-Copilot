@@ -175,7 +175,7 @@ function VehicleChip({ label }: VehicleChipProps) {
 const planSteps = [
   {
     label: "Exterior",
-    note: "Front, rear, and LHS damage evidence",
+    note: "Front and rear photo evidence",
   },
   {
     label: "Tyres",

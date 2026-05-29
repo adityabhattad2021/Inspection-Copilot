@@ -31,6 +31,7 @@ import {
   getEngineAnswerTranscript,
   type EngineQnaAnswers,
 } from "@/src/features/inspection/engine-guided-check";
+import { sanitizeAgentMessageForDisplay } from "@/src/features/inspection/agent-message";
 import {
   findActiveInspectionStep,
   getCapturedPhotoReviewEvent,
@@ -382,8 +383,13 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         }
 
         if (event.type === "agent-message") {
-          const streamedAgentMessage = normalizeWordStreamText(event.text);
+          const streamedAgentMessage = sanitizeAgentMessageForDisplay(
+            normalizeWordStreamText(event.text),
+          );
           agentUtteranceRef.current = streamedAgentMessage;
+          if (!streamedAgentMessage) {
+            return;
+          }
           if (greetingGateRef.current.isActive) {
             setAgentMessage(streamedAgentMessage);
             greetingTargetMessageRef.current = streamedAgentMessage;

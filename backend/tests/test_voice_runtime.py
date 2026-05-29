@@ -556,7 +556,7 @@ def test_accept_photo_evidence_stores_pending_photo_and_advances_step(tmp_path, 
             mime_type="image/jpeg",
             source_uri="file:///cache/front-main.jpg",
         ),
-        guidance="Photo accepted. Moving to LHS front door.",
+        guidance="Photo accepted. Moving to rear main.",
         visible_parts=[
             "front bumper",
             "bonnet line",
@@ -568,7 +568,7 @@ def test_accept_photo_evidence_stores_pending_photo_and_advances_step(tmp_path, 
     assert result["type"] == "photo_acceptance"
     assert result["accepted"] is True
     assert result["completedStepId"] == "front-main"
-    assert result["nextStep"]["id"] == "lhs-front-door"
+    assert result["nextStep"]["id"] == "rear-main"
     assert result["session"]["plan"]["steps"][0]["status"] == "complete"
     assert result["session"]["plan"]["steps"][1]["status"] == "active"
 
@@ -601,37 +601,6 @@ def test_accept_photo_evidence_stores_pending_photo_and_advances_step(tmp_path, 
             "front-left tyre",
         ],
     }
-
-
-def test_accept_photo_evidence_advances_lhs_door_without_observation_prompt(
-    tmp_path,
-    monkeypatch,
-):
-    monkeypatch.setenv("JOCKEY_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
-    session_id = _create_started_session()
-    _capture_step(session_id, "front-main", "front-main-good")
-
-    result = accept_photo_evidence(
-        session_id=session_id,
-        step_id="lhs-front-door",
-        pending_photo=PendingPhotoReview(
-            image_bytes=b"\xff\xd8lhs-door-photo\xff\xd9",
-            mime_type="image/jpeg",
-            source_uri="file:///cache/lhs-front-door.jpg",
-        ),
-        guidance="Photo accepted. Moving to the next inspection step.",
-        visible_parts=["left front door", "door handle"],
-    )
-
-    assert result["type"] == "photo_acceptance"
-    assert result["accepted"] is True
-    assert result["completedStepId"] == "lhs-front-door"
-    assert result["nextStep"]["id"] == "rear-main"
-    assert result["message"] == "Photo accepted. Moving to the next inspection step."
-    assert "scratch" not in result["message"].lower()
-    assert "dent" not in result["message"].lower()
-    assert result["session"]["plan"]["steps"][1]["status"] == "complete"
-    assert result["session"]["plan"]["steps"][2]["status"] == "active"
 
 
 def test_voice_accept_photo_handler_uses_pending_photo_and_notifies_mobile(tmp_path, monkeypatch):
@@ -676,7 +645,7 @@ def test_voice_accept_photo_handler_uses_pending_photo_and_notifies_mobile(tmp_p
     asyncio.run(handlers["accept_photo"](Params()))
 
     assert tool_results[0]["type"] == "photo_acceptance"
-    assert tool_results[0]["nextStep"]["id"] == "lhs-front-door"
+    assert tool_results[0]["nextStep"]["id"] == "rear-main"
     assert sent_voice_results == tool_results
     assert sent_tool_results == [("call_accept_photo", tool_results[0], False)]
 
@@ -728,7 +697,7 @@ def test_voice_frame_handler_notifies_mobile_for_adjust_decision():
     assert sent_tool_results == [("call_frame_adjust", tool_results[0], False)]
 
 
-def test_voice_handlers_do_not_expose_lhs_door_observation_tool():
+def test_voice_handlers_do_not_expose_door_observation_tool():
     session_id = _create_started_session()
     handlers = build_voice_function_handlers(session_id)
 
@@ -738,12 +707,6 @@ def test_voice_handlers_do_not_expose_lhs_door_observation_tool():
 def test_voice_engine_handler_records_ai_interpreted_answers():
     session_id = _create_started_session()
     _capture_step(session_id, "front-main", "front-main-good")
-    _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
-    record_voice_observation(
-        session_id=session_id,
-        step_id="lhs-front-door",
-        transcript="Minor scratch near the handle, no dent.",
-    )
     _capture_step(session_id, "rear-main", "rear-main-good")
     _capture_step(session_id, "dashboard-odometer", "dashboard-good")
     sent_voice_results = []
@@ -820,54 +783,38 @@ def test_rtvi_observer_does_not_echo_hidden_seed_prompt_to_client():
     assert params.user_llm_enabled is False
 
 
-def test_voice_transcript_turn_saves_lhs_observation_and_advances_session():
+def test_voice_transcript_turn_rejects_photo_step_without_observation_step():
     session_id = _create_started_session()
     _capture_step(session_id, "front-main", "front-main-good")
-    _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
 
     response = client.post(
         "/voice/transcript-turn",
         json={
             "sessionId": session_id,
-            "stepId": "lhs-front-door",
+            "stepId": "front-main",
             "transcript": "Minor scratch near the handle, no dent.",
         },
     )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["type"] == "observation"
-    assert body["structuredFields"] == {
-        "dent": False,
-        "issue": "scratch",
-        "severity": "minor",
-    }
-    assert body["nextStep"]["id"] == "rear-main"
-    assert body["session"]["plan"]["steps"][1]["status"] == "complete"
-    assert body["session"]["plan"]["steps"][2]["status"] == "active"
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Step does not require a spoken observation"
 
     with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
         row = connection.execute(
             """
-            SELECT step_id, issue, severity
+            SELECT step_id
             FROM structured_observations
             WHERE session_id = ?
             """,
             (session_id,),
         ).fetchone()
 
-    assert row == ("lhs-front-door", "scratch", "minor")
+    assert row is None
 
 
 def test_voice_record_engine_observation_marks_session_ready_for_submission():
     session_id = _create_started_session()
     _capture_step(session_id, "front-main", "front-main-good")
-    _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
-    record_voice_observation(
-        session_id=session_id,
-        step_id="lhs-front-door",
-        transcript="Minor scratch near the handle, no dent.",
-    )
     _capture_step(session_id, "rear-main", "rear-main-good")
     _capture_step(session_id, "dashboard-odometer", "dashboard-good")
 

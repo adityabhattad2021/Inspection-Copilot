@@ -69,7 +69,7 @@ def test_vehicle_lookup_rejects_unknown_demo_registration():
     assert response.json()["detail"] == "Unknown demo registration"
 
 
-def test_create_session_returns_vehicle_and_five_step_plan():
+def test_create_session_returns_vehicle_and_four_step_plan():
     response = client.post(
         "/sessions",
         json={"registrationNumber": "KA03MX2147"},
@@ -83,7 +83,6 @@ def test_create_session_returns_vehicle_and_five_step_plan():
     assert body["plan"]["name"] == "SUV Petrol Automatic Inspection Plan"
     assert [step["id"] for step in body["plan"]["steps"]] == [
         "front-main",
-        "lhs-front-door",
         "rear-main",
         "dashboard-odometer",
         "engine-sound",
@@ -136,10 +135,9 @@ def test_create_session_persists_snapshot_of_seeded_plan_steps():
 
     assert rows == [
         ("front-main", "pending", 1),
-        ("lhs-front-door", "pending", 2),
-        ("rear-main", "pending", 3),
-        ("dashboard-odometer", "pending", 4),
-        ("engine-sound", "pending", 5),
+        ("rear-main", "pending", 2),
+        ("dashboard-odometer", "pending", 3),
+        ("engine-sound", "pending", 4),
     ]
 
 

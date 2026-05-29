@@ -11,10 +11,15 @@ if os.environ.get("JOCKEY_COPILOT_STORAGE_BACKEND") == "dynamodb":
         get_session_step,
         get_vehicle,
         initialize_database,
+        list_ai_interventions,
+        list_evidence_items,
         list_profile_payloads,
+        list_structured_observations,
         list_vehicles,
         load_profile_payload,
+        load_report_payload,
         load_session_payload,
+        save_report_payload,
         save_ai_intervention,
         save_evidence_item,
         save_profile_payload,
@@ -46,6 +51,13 @@ else:
         save_profile_payload,
     )
     from app.database.queries import get_vehicle, list_vehicles
+    from app.database.report_queries import (
+        list_ai_interventions,
+        list_evidence_items,
+        list_structured_observations,
+        load_report_payload,
+        save_report_payload,
+    )
     from app.database.session_queries import load_session_payload, save_session_payload
     from app.database.setup import clear_database, initialize_database, seed_database
 
@@ -60,13 +72,18 @@ __all__ = [
     "get_session_step",
     "get_vehicle",
     "initialize_database",
+    "list_ai_interventions",
+    "list_evidence_items",
     "list_profile_payloads",
+    "list_structured_observations",
     "list_vehicles",
     "load_profile_payload",
+    "load_report_payload",
     "load_session_payload",
     "save_ai_intervention",
     "save_evidence_item",
     "save_profile_payload",
+    "save_report_payload",
     "save_session_payload",
     "save_structured_observation",
     "seed_database",

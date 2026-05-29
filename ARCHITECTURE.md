@@ -422,10 +422,9 @@ flowchart TD
   Vehicle["KA03MX2147<br/>Hyundai Creta 2020 SX Petrol AT"] --> Plan["SUV Petrol Automatic Plan"]
   Plan --> F["1. Front frame<br/>photo + live guidance"]
   F --> R["2. Rear frame<br/>photo + live guidance"]
-  R --> LHS["3. LHS front door<br/>photo evidence"]
-  LHS --> Dash["4. Dashboard / cluster / odometer<br/>photo"]
-  Dash --> Engine["5. Engine sound<br/>guided check + optional audio evidence"]
-  Engine --> Submit["6. Submit inspection"]
+  R --> Dash["3. Dashboard / cluster / odometer<br/>photo"]
+  Dash --> Engine["4. Engine sound<br/>guided check + optional audio evidence"]
+  Engine --> Submit["5. Submit inspection"]
   Submit --> Final["Dashboard/email AI Inspection Quality Report"]
 ```
 

@@ -23,14 +23,6 @@ LIVE_FRAME_RESPONSES: dict[str, dict[str, Any]] = {
             "front-left tyre",
         ],
     },
-    "lhs-door-scratch": {
-        "confidence": 0.9,
-        "guidance": "Good. Hold still, I can see the left front door.",
-        "problems": ["possible scratch near handle"],
-        "readyToCapture": True,
-        "status": "hold",
-        "visibleParts": ["left front door", "door handle"],
-    },
     "rear-main-good": {
         "confidence": 0.92,
         "guidance": "Good. Hold still, taking the rear photo.",

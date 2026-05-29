@@ -140,7 +140,7 @@ The hackathon demo should use a focused subset of this schema:
 - Field 127: Brake
 - Field 128: Suspension
 
-For the live demo, complete only the critical path fields needed to show the copilot loop: front exterior, LHS door photo evidence, rear exterior, dashboard/odometer, and guided engine sound check.
+For the live demo, complete only the critical path fields needed to show the copilot loop: front exterior, rear exterior, dashboard/odometer, and guided engine sound check.
 
 ## Core Features
 
@@ -251,21 +251,22 @@ When ready:
 
 ### 4. Voice-To-Form Filling
 
-The Jockey can answer in natural language. The app converts the utterance into fields from the inspection schema.
+During the guided engine check, the Jockey can answer in natural language. The app converts the utterance into fields from the inspection schema.
 
 Example:
 
-Jockey says: "Minor scratch on left front door, no dent."
+Jockey says: "No knocking, no rattling, mild vibration, exhaust normal."
 
 Structured result:
 
 ```json
 {
-  "section": "Exterior & Tyres",
-  "field": "LHS front door",
-  "issue": "scratch",
-  "severity": "minor",
-  "dent": false,
+  "section": "Engine & Transmission",
+  "field": "Engine sound",
+  "knocking": false,
+  "rattling": false,
+  "idleVibration": "mild",
+  "exhaustSound": "normal",
   "confidence": 0.91
 }
 ```
@@ -363,20 +364,17 @@ The demo and product story remain the same.
    - app auto-captures and accepts
 6. Rear Main:
    - copilot guides angle and auto-captures
-7. LHS Door Photo:
-   - copilot asks for close-up
-   - app auto-captures and accepts photo evidence
-8. Dashboard/Odometer:
+7. Dashboard/Odometer:
    - copilot asks to increase light or move closer
    - app accepts odometer evidence
-9. Guided Engine Sound Check:
+8. Guided Engine Sound Check:
    - copilot tells Jockey how long to listen and where
    - Jockey answers knocking/rattling/vibration questions
    - optional audio evidence is attached
-10. Submit Inspection:
+9. Submit Inspection:
    - mobile app shows submitted status
    - backend creates dashboard/email report link
-11. External Report:
+10. External Report:
    - dashboard or HTML report shows quality score
    - shows intervention trail
    - shows structured Cars24 checklist fields

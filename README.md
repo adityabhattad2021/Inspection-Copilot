@@ -8,11 +8,10 @@ The prototype is intentionally demo-first: local FastAPI backend, Expo React Nat
 
 - Jockey onboarding with language selection.
 - Demo registration lookup for known vehicles.
-- Dynamic five-step inspection plan.
+- Dynamic four-step inspection plan.
 - Realtime voice-guided camera flow.
 - Frame intervention events such as adjust, hold, and capture.
 - Photo evidence save path for sample and realtime captures.
-- Structured LHS door damage observation from natural language.
 - Guided engine-sound check based on Jockey answers.
 - Dev-only inspection flow logging for debugging the live demo.
 
@@ -28,15 +27,14 @@ The main pitch/demo path defaults to `KA03MX2147`.
 
 ## Inspection Flow
 
-The demo plan has five focused steps:
+The demo plan has four focused steps:
 
 1. Front Main
-2. LHS front door
-3. Rear Main
-4. Dashboard and odometer reading
-5. Engine sound condition
+2. Rear Main
+3. Dashboard and odometer reading
+4. Engine sound condition
 
-Photo steps can auto-capture after the realtime voice agent reports a hold/ready decision. The LHS front door step captures photo evidence only. The engine step guides the Jockey through idle, gentle rev, exhaust listening, and final answer submission.
+Photo steps can auto-capture after the realtime voice agent reports a hold/ready decision. The engine step guides the Jockey through idle, gentle rev, exhaust listening, and final answer submission.
 
 ## Repository Layout
 
@@ -228,7 +226,7 @@ make clean
 5. Create a Jockey profile and choose a language.
 6. Look up `KA03MX2147`.
 7. Confirm the vehicle and start inspection.
-8. Follow the voice guidance through Front Main, LHS front door, Rear Main, Dashboard/Odometer, and Engine Sound.
+8. Follow the voice guidance through Front Main, Rear Main, Dashboard/Odometer, and Engine Sound.
 9. Submit the inspection after the engine answer.
 
 The current mobile app returns to lookup after submission. External report generation is a later backend/dashboard concern in the sprint plan.

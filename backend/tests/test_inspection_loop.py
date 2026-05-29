@@ -117,7 +117,7 @@ def test_live_frame_analysis_rejects_unrecognized_frame_without_fallback():
     assert response.json()["detail"] == "Unrecognized live frame input"
 
 
-def test_photo_evidence_accepts_step_and_advances_to_lhs_door():
+def test_photo_evidence_accepts_step_and_advances_to_rear_main():
     session_id = _create_session()
     client.post(f"/sessions/{session_id}/start", json={})
 
@@ -138,7 +138,7 @@ def test_photo_evidence_accepts_step_and_advances_to_lhs_door():
 
     assert body["accepted"] is True
     assert body["completedStepId"] == "front-main"
-    assert body["nextStep"]["id"] == "lhs-front-door"
+    assert body["nextStep"]["id"] == "rear-main"
     assert body["session"]["plan"]["steps"][0]["status"] == "complete"
     assert body["session"]["plan"]["steps"][1]["status"] == "active"
 
@@ -153,23 +153,6 @@ def test_photo_evidence_accepts_step_and_advances_to_lhs_door():
         ).fetchone()
 
     assert row == ("front-main", "photo", "sample://front-main-good", 1)
-
-
-def test_lhs_door_photo_acceptance_advances_without_observation_question():
-    session_id = _create_session()
-    client.post(f"/sessions/{session_id}/start", json={})
-    _capture_step(session_id, "front-main", "front-main-good")
-
-    body = _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
-
-    assert body["accepted"] is True
-    assert body["completedStepId"] == "lhs-front-door"
-    assert body["nextStep"]["id"] == "rear-main"
-    assert body["agentMessage"] == "Photo accepted. Moving to the next inspection step."
-    assert "scratch" not in body["agentMessage"].lower()
-    assert "dent" not in body["agentMessage"].lower()
-    assert body["session"]["plan"]["steps"][1]["status"] == "complete"
-    assert body["session"]["plan"]["steps"][2]["status"] == "active"
 
 
 def test_photo_evidence_upload_stores_image_bytes_and_records_local_file():
@@ -234,58 +217,40 @@ def test_realtime_photo_evidence_requires_uploaded_image():
     assert response.json()["detail"] == "Realtime photo evidence requires an image upload"
 
 
-def test_structure_observation_saves_lhs_door_damage_and_advances():
+def test_structure_observation_rejects_photo_step_without_observation_prompt():
     session_id = _create_session()
     client.post(f"/sessions/{session_id}/start", json={})
     _capture_step(session_id, "front-main", "front-main-good")
-    _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
 
     response = client.post(
         "/ai/structure-observation",
         json={
             "sessionId": session_id,
-            "stepId": "lhs-front-door",
+            "stepId": "front-main",
             "transcript": "Minor scratch near the handle, no dent.",
         },
     )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["structuredFields"] == {
-        "dent": False,
-        "issue": "scratch",
-        "severity": "minor",
-    }
-    assert body["nextStep"]["id"] == "rear-main"
-    assert body["session"]["plan"]["steps"][1]["status"] == "complete"
-    assert body["session"]["plan"]["steps"][2]["status"] == "active"
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Step does not require a spoken observation"
 
     with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
         row = connection.execute(
             """
-            SELECT step_id, issue, severity
+            SELECT step_id
             FROM structured_observations
             WHERE session_id = ?
             """,
             (session_id,),
         ).fetchone()
 
-    assert row == ("lhs-front-door", "scratch", "minor")
+    assert row is None
 
 
 def test_engine_check_completes_final_step_and_session_complete_thanks_agent():
     session_id = _create_session()
     client.post(f"/sessions/{session_id}/start", json={})
     _capture_step(session_id, "front-main", "front-main-good")
-    _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
-    client.post(
-        "/ai/structure-observation",
-        json={
-            "sessionId": session_id,
-            "stepId": "lhs-front-door",
-            "transcript": "Minor scratch near the handle, no dent.",
-        },
-    )
     _capture_step(session_id, "rear-main", "rear-main-good")
     _capture_step(session_id, "dashboard-odometer", "dashboard-good")
 
@@ -315,7 +280,7 @@ def test_engine_check_completes_final_step_and_session_complete_thanks_agent():
     assert complete_response.status_code == 200
     complete_body = complete_response.json()
     assert complete_body["status"] == "completed"
-    assert complete_body["completedStepCount"] == 5
+    assert complete_body["completedStepCount"] == 4
     assert "Thank you" in complete_body["agentMessage"]
 
 
@@ -323,15 +288,6 @@ def test_engine_check_accepts_structured_qna_answers_and_records_observation():
     session_id = _create_session()
     client.post(f"/sessions/{session_id}/start", json={})
     _capture_step(session_id, "front-main", "front-main-good")
-    _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
-    client.post(
-        "/ai/structure-observation",
-        json={
-            "sessionId": session_id,
-            "stepId": "lhs-front-door",
-            "transcript": "Minor scratch near the handle, no dent.",
-        },
-    )
     _capture_step(session_id, "rear-main", "rear-main-good")
     _capture_step(session_id, "dashboard-odometer", "dashboard-good")
 

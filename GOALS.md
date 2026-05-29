@@ -82,10 +82,9 @@ Nice-to-have:
 - Vehicle number input.
 - Mock vehicle lookup with at least 2 sample cars.
 - Dynamic inspection plan.
-- Five-step live demo:
+- Four-step live demo:
   - Front Main
   - Rear Main
-  - LHS Door Damage
   - Dashboard/Odometer
   - Guided Engine Sound Check
 - AI or heuristic feedback for bad/good capture.
@@ -169,21 +168,7 @@ Copilot guides:
 
 Accept or ask for small adjustment.
 
-### Step 4: LHS Door Photo
-
-Copilot guides:
-
-"Show the left front door and handle area clearly."
-
-Accept or ask for small adjustment. No scratch/dent/rust/dirt follow-up is asked in the demo flow.
-
-App records:
-
-- Section: Exterior & Tyres
-- Field: LHS front door
-- Evidence: image attached
-
-### Step 5: Dashboard/Odometer
+### Step 4: Dashboard/Odometer
 
 Copilot asks:
 
@@ -195,7 +180,7 @@ If dark:
 
 Accept after correction.
 
-### Step 6: Guided Engine Sound Check
+### Step 5: Guided Engine Sound Check
 
 Copilot says:
 
@@ -213,7 +198,7 @@ Optional evidence:
 
 "Audio evidence attached, but the engine fields are based on the guided Jockey answers."
 
-### Step 7: Submit And External Report
+### Step 6: Submit And External Report
 
 Mobile app shows:
 
@@ -225,7 +210,6 @@ Dashboard/email report shows:
 - media quality score
 - retake count
 - AI interventions
-- confirmed scratch
 - guided engine-sound answers
 - optional engine audio evidence status
 - pricing-risk notes
