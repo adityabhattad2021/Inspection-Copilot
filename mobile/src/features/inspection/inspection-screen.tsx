@@ -47,7 +47,7 @@ import {
 import { InspectionGreetingView } from "@/src/features/inspection/inspection-greeting-view";
 import { InspectionUnavailableView } from "@/src/features/inspection/inspection-state-view";
 import { InspectionStepCard } from "@/src/features/inspection/inspection-step-card";
-import { ObservationCard } from "@/src/features/inspection/observation-card";
+import { NeedsObservationScreen } from "@/src/features/inspection/needs-observation-screen";
 import { createInspectionVoiceDriver } from "@/src/features/inspection/pipecat-voice-boundary";
 import type { AgentProcessingPhase } from "@/src/features/inspection/pipecat-voice-boundary";
 import { captureRealtimeFrame } from "@/src/features/inspection/realtime-frame-capture";
@@ -97,6 +97,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   const [isGreetingActive, setIsGreetingActive] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isComplete, setIsComplete] = useState(false);
+  const [observationTranscript, setObservationTranscript] = useState("");
   const [localVideoTrack, setLocalVideoTrack] = useState<MediaStreamTrack | null>(
     null,
   );
@@ -355,6 +356,14 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           return;
         }
 
+        if (event.type === "user-transcript") {
+          logInspectionScreen("user-transcript", event.text);
+          if (activeStepRef.current?.status === "needs_observation") {
+            setObservationTranscript(event.text);
+          }
+          return;
+        }
+
         if (event.type === "voice-ready") {
           logInspectionScreen("voice-ready");
         }
@@ -398,6 +407,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       updateGreetingDisplayMessage("");
       setErrorMessage(null);
       setLocalVideoTrack(null);
+      setObservationTranscript("");
       setPendingCaptureStepId(null);
       clearGreetingFinishTimer();
       clearGreetingWordTimer();
@@ -471,6 +481,11 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     clearCameraFrameJudgeTimer();
     resetFrameJudgementGate();
     initialStepInstructionSentRef.current = false;
+    if (activeStep?.status === "needs_observation") {
+      setObservationTranscript(stepMedia?.observationTranscript ?? "");
+      return;
+    }
+    setObservationTranscript("");
     if (activeStep?.kind === "photo") {
       setAgentMessage(activeStep.instructions);
     }
@@ -478,8 +493,10 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     activeStep?.id,
     activeStep?.instructions,
     activeStep?.kind,
+    activeStep?.status,
     clearCameraFrameJudgeTimer,
     resetFrameJudgementGate,
+    stepMedia?.observationTranscript,
   ]);
 
   useEffect(() => {
@@ -649,6 +666,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       !session ||
       !activeStep ||
       isRealtimeCameraStep ||
+      activeStep.status === "needs_observation" ||
       initialStepInstructionSentRef.current
     ) {
       return;
@@ -841,7 +859,8 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   }
 
   async function handleObservationAnswer() {
-    if (!activeStep || !stepMedia?.observationTranscript || isBusy) {
+    const transcript = observationTranscript.trim();
+    if (!activeStep || !transcript || isBusy) {
       return;
     }
 
@@ -852,10 +871,11 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       const observation = await structureObservation({
         sessionId,
         stepId: activeStep.id,
-        transcript: stepMedia.observationTranscript,
+        transcript,
       });
       setSession(observation.session);
       setAgentMessage(observation.summary);
+      setObservationTranscript("");
       await voiceDriver.sendAgentMessage(observation.summary);
     } catch (error) {
       setErrorMessage(getInspectionErrorMessage(error));
@@ -917,6 +937,26 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     ? session.plan.steps.findIndex((step) => step.id === activeStep.id)
     : -1;
 
+  if (activeStep?.status === "needs_observation") {
+    return (
+      <NeedsObservationScreen
+        bottomInset={insets.bottom}
+        errorMessage={errorMessage}
+        frame={currentFrame}
+        isBusy={isBusy}
+        message={agentMessage || activeStep.instructions}
+        onConfirm={handleObservationAnswer}
+        onSelectTranscript={setObservationTranscript}
+        progressSteps={progressSteps}
+        registrationNumber={session.vehicle.registrationNumber}
+        step={activeStep}
+        topInset={insets.top}
+        transcript={observationTranscript}
+        vehicleTitle={vehicleTitle}
+      />
+    );
+  }
+
   if (
     activeStep?.kind === "photo" &&
     activeStep.status !== "needs_observation" &&
@@ -963,14 +1003,6 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       <ProgressRail steps={progressSteps} />
 
       {activeStep ? <InspectionStepCard step={activeStep} /> : null}
-
-      {activeStep?.status === "needs_observation" && stepMedia ? (
-        <ObservationCard
-          isBusy={isBusy}
-          onAnswer={handleObservationAnswer}
-          transcript={stepMedia.observationTranscript ?? ""}
-        />
-      ) : null}
 
       {activeStep?.kind === "engine-guided" ? (
         <EngineGuidedCheck isBusy={isBusy} onSubmit={handleEngineSubmit} />
