@@ -27,7 +27,7 @@ Expo React Native app for the Cars24 Jockey Copilot hackathon prototype. The app
 
 ## Main Mobile Surfaces
 
-- `src/api/client.ts` owns the typed backend client and `EXPO_PUBLIC_API_BASE_URL` handling.
+- `src/api/client.ts` owns the typed backend client and separate dev/release backend URL handling.
 - `src/features/onboarding/*` owns jockey profile setup and persistence.
 - `src/features/lookup/*` owns registration lookup, vehicle-found navigation, and 3D model display.
 - `src/features/inspection/inspection-screen.tsx` owns the live inspection workflow.
@@ -59,7 +59,8 @@ The mobile client defaults to `http://localhost:8000`. For an Android device or 
 make android-ready
 ```
 
-Release builds default to the deployed AWS backend at `http://65.0.101.246` when `EXPO_PUBLIC_API_BASE_URL` is not set.
+Release builds default to the deployed AWS backend at `http://65.0.101.246` when `EXPO_PUBLIC_RELEASE_API_BASE_URL` is not set.
+Development builds default to the local backend at `http://localhost:8000` and use only `EXPO_PUBLIC_DEV_API_BASE_URL`, so release settings cannot leak into normal dev runs.
 
 ## Mobile Setup
 
@@ -83,26 +84,37 @@ The app uses Expo SDK 54, Expo Router, React Native 0.81, Daily/Pipecat realtime
 Mobile:
 
 ```bash
-EXPO_PUBLIC_API_BASE_URL=http://localhost:8000
+EXPO_PUBLIC_DEV_API_BASE_URL=http://localhost:8000
+EXPO_PUBLIC_RELEASE_API_BASE_URL=http://65.0.101.246
 EXPO_PUBLIC_INSPECTION_FLOW_LOG=0
 ```
 
-- `EXPO_PUBLIC_API_BASE_URL` overrides the backend URL used by `src/api/client.ts`.
-- `EXPO_PUBLIC_INSPECTION_FLOW_LOG=0` disables dev-only flow logging. In development, logging is enabled by default.
+- `EXPO_PUBLIC_DEV_API_BASE_URL` overrides the backend URL used by development builds.
+- `EXPO_PUBLIC_RELEASE_API_BASE_URL` overrides the backend URL used by release builds.
+- `EXPO_PUBLIC_INSPECTION_FLOW_LOG=0` disables dev-only flow logging. The Makefile keeps this disabled for normal dev runs because it posts many inspection events back to the backend.
 
 Backend variables used by the mobile flow:
 
 ```bash
-OPENAI_API_KEY=sk-...
-OPENAI_REALTIME_MODEL=gpt-realtime-2
-OPENAI_REALTIME_VOICE=alloy
+VOICE_LLM_PROVIDER=gemini
+GOOGLE_API_KEY=...
+GOOGLE_MODEL=models/gemini-3.1-flash-live-preview
+GOOGLE_VOICE_ID=Charon
+
+# One-line rollback:
+# VOICE_LLM_PROVIDER=openai
+# OPENAI_API_KEY=sk-...
+# OPENAI_REALTIME_MODEL=gpt-realtime-2
+# OPENAI_REALTIME_VOICE=alloy
+
 JOCKEY_COPILOT_VOICE_BASE_URL=http://localhost:8000
 JOCKEY_COPILOT_FLOW_LOG_PATH=backend/.local/inspection-flow.ndjson
 JOCKEY_COPILOT_EVIDENCE_DIR=backend/.local/evidence
 ```
 
-- `OPENAI_API_KEY` is required for the realtime voice runtime to report ready.
-- `OPENAI_REALTIME_MODEL`, `OPENAI_REALTIME_VOICE`, and `JOCKEY_COPILOT_VOICE_BASE_URL` customize `/voice/config`.
+- Gemini Live is the default voice LLM provider. Set `VOICE_LLM_PROVIDER=openai` to roll back without changing mobile code.
+- `GOOGLE_API_KEY` or `GEMINI_API_KEY` is required for the Gemini realtime voice runtime to report ready.
+- `GOOGLE_MODEL`, `GOOGLE_VOICE_ID`, and `JOCKEY_COPILOT_VOICE_BASE_URL` customize `/voice/config`; OpenAI model and voice vars apply only when `VOICE_LLM_PROVIDER=openai`.
 - `JOCKEY_COPILOT_FLOW_LOG_PATH` controls where `/debug/inspection-flow-log` writes NDJSON.
 - `JOCKEY_COPILOT_EVIDENCE_DIR` controls where realtime uploaded photo evidence is stored.
 
@@ -192,7 +204,7 @@ The release APK points at the deployed backend. The current backend is HTTP, so 
 3. Create or reuse a jockey profile.
 4. Look up `KA03MX2147`.
 5. Confirm the vehicle-found screen and start inspection.
-6. Follow realtime voice guidance for Front Main, Rear Main, LHS front door, Dashboard/Odometer, and Engine Sound.
+6. Follow realtime voice guidance for Front Main, LHS front door, Rear Main, Dashboard/Odometer, and Engine Sound.
 7. Submit the inspection when the engine check completes.
 
 The mobile app ends at submission and returns to lookup. External report generation is a backend/dashboard concern, not a mobile route in the current code.

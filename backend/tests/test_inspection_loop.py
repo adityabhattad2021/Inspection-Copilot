@@ -155,6 +155,23 @@ def test_photo_evidence_accepts_step_and_advances_to_lhs_door():
     assert row == ("front-main", "photo", "sample://front-main-good", 1)
 
 
+def test_lhs_door_photo_acceptance_advances_without_observation_question():
+    session_id = _create_session()
+    client.post(f"/sessions/{session_id}/start", json={})
+    _capture_step(session_id, "front-main", "front-main-good")
+
+    body = _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
+
+    assert body["accepted"] is True
+    assert body["completedStepId"] == "lhs-front-door"
+    assert body["nextStep"]["id"] == "rear-main"
+    assert body["agentMessage"] == "Photo accepted. Moving to the next inspection step."
+    assert "scratch" not in body["agentMessage"].lower()
+    assert "dent" not in body["agentMessage"].lower()
+    assert body["session"]["plan"]["steps"][1]["status"] == "complete"
+    assert body["session"]["plan"]["steps"][2]["status"] == "active"
+
+
 def test_photo_evidence_upload_stores_image_bytes_and_records_local_file():
     session_id = _create_session()
     client.post(f"/sessions/{session_id}/start", json={})

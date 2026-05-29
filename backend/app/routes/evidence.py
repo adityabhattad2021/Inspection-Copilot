@@ -12,7 +12,6 @@ from app.database import (
     get_session_step,
     load_session_payload,
     save_evidence_item,
-    set_step_status,
 )
 from app.routes.sessions import InspectionStep, SessionResponse
 from app.storage.s3_store import get_s3_bucket, upload_bytes
@@ -180,26 +179,6 @@ async def save_photo_evidence(http_request: Request) -> PhotoEvidenceResponse:
         metadata={"sampleKey": request.sample_key, **image_metadata},
         created_at=now,
     )
-
-    if request.step_id == "lhs-front-door":
-        set_step_status(
-            request.session_id,
-            request.step_id,
-            "needs_observation",
-            now,
-        )
-        updated_session = _load_session(request.session_id)
-        return PhotoEvidenceResponse(
-            evidence_id=evidence_id,
-            accepted=accepted,
-            completed_step_id=request.step_id,
-            next_step=None,
-            agent_message=(
-                "I see a possible mark near the door handle. Is it a scratch, "
-                "dent, rust, or dirt?"
-            ),
-            session=updated_session,
-        )
 
     next_step_id = complete_step_and_activate_next(
         request.session_id,

@@ -422,7 +422,7 @@ flowchart TD
   Vehicle["KA03MX2147<br/>Hyundai Creta 2020 SX Petrol AT"] --> Plan["SUV Petrol Automatic Plan"]
   Plan --> F["1. Front frame<br/>photo + live guidance"]
   F --> R["2. Rear frame<br/>photo + live guidance"]
-  R --> LHS["3. LHS door damage<br/>photo + voice note"]
+  R --> LHS["3. LHS front door<br/>photo evidence"]
   LHS --> Dash["4. Dashboard / cluster / odometer<br/>photo"]
   Dash --> Engine["5. Engine sound<br/>guided check + optional audio evidence"]
   Engine --> Submit["6. Submit inspection"]
@@ -557,7 +557,7 @@ flowchart LR
 | `POST /ai/structure-observation` | `sessionId`, `stepId`, `transcript` | `fieldId`, `issue`, `severity`, `confidence` |
 | `POST /ai/engine-check` | `sessionId`, `stepId`, `phase`, `jockeyAnswers[]` | `nextInstruction`, `questions[]`, `structuredFields[]`, `confidence` |
 | `POST /ai/audio-evidence-qa` | `sessionId`, `audioUrl`, `localMetrics` | `accepted`, `qualityScore`, `evidenceNote` |
-| `GET /voice/config` | none | `provider`, `transport`, `startUrl`, `model`, `voice`, `ready`, `missing[]` |
+| `GET /voice/config` | none | `provider`, `llmProvider`, `transport`, `startUrl`, `model`, `voice`, `ready`, `missing[]` |
 | `POST /voice/transcript-turn` | `sessionId`, `stepId`, `transcript` | `type`, `message`, `structuredFields`, `nextStep`, `session` |
 | `POST /sessions/{id}/complete` | `sessionId` | `status`, `reportUrl`, `dashboardUrl`, `emailStatus` |
 
@@ -611,8 +611,8 @@ flowchart LR
   Lambda --> DDB["SQLite local file<br/>replaceable DB adapter"]
   Lambda --> S3["S3"]
   Lambda --> SES["SES/email provider<br/>optional"]
-  Lambda --> Secrets["Lambda env / Secrets Manager<br/>OPENAI_API_KEY"]
-  Lambda --> OpenAI["OpenAI API"]
+  Lambda --> Secrets["Lambda env / Secrets Manager<br/>GOOGLE_API_KEY or OPENAI_API_KEY"]
+  Lambda --> VoiceLLM["Gemini Live or OpenAI Realtime API"]
 ```
 
 ## Error And Fallback Flow

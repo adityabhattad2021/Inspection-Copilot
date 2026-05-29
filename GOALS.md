@@ -169,23 +169,19 @@ Copilot guides:
 
 Accept or ask for small adjustment.
 
-### Step 4: Door Damage
+### Step 4: LHS Door Photo
 
-Copilot asks:
+Copilot guides:
 
-"I see a possible mark near the left front door handle. Is this scratch, dent, rust, or dirt?"
+"Show the left front door and handle area clearly."
 
-User says:
+Accept or ask for small adjustment. No scratch/dent/rust/dirt follow-up is asked in the demo flow.
 
-"Minor scratch, no dent."
-
-App fills:
+App records:
 
 - Section: Exterior & Tyres
 - Field: LHS front door
-- Issue: scratch
-- Severity: minor
-- Dent: no
+- Evidence: image attached
 
 ### Step 5: Dashboard/Odometer
 

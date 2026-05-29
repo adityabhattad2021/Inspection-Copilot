@@ -61,11 +61,9 @@ export function getInspectionStepChangedEvent(
       : "Expected parts: none.";
   const action =
     step.status === "needs_observation"
-      ? step.id === "lhs-front-door"
-        ? "Ask the jockey one short question to classify the visible door mark as scratch, dent, rust, or dirt, then keep listening for the answer."
-        : "Ask the jockey one short question for the field observation, then keep listening for the answer."
+      ? "Ask the jockey one short question for the field observation, then keep listening for the answer."
       : step.kind === "engine-guided"
-        ? "Guide the engine-sound check one short step at a time. The jockey can either tap the visible options or answer aloud; if they answer aloud, record knocking, rattling, idle vibration, and exhaust sound."
+        ? "Guide the engine-sound check as instruction first, Q&A after. Give one physical check instruction, wait for the jockey to say ready or use the visible control, then ask only the next engine question. Do not ask all engine questions at once."
         : "Tell the jockey what to do for this step in your own short field-inspection words.";
 
   return [

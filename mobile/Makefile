@@ -2,6 +2,8 @@
 
 ROOT_DIR := $(abspath $(CURDIR)/..)
 BACKEND_PORT ?= 8000
+DEV_API_BASE_URL ?= http://localhost:8000
+DEV_INSPECTION_FLOW_LOG ?= 0
 PROD_API_BASE_URL ?= http://65.0.101.246
 APK_PATH := android/app/build/outputs/apk/release/app-release.apk
 APK_DIST_PATH := dist/jockey-copilot-release.apk
@@ -24,19 +26,19 @@ install:
 	npm install
 
 start:
-	npx expo start --dev-client
+	EXPO_PUBLIC_DEV_API_BASE_URL="$(DEV_API_BASE_URL)" EXPO_PUBLIC_INSPECTION_FLOW_LOG="$(DEV_INSPECTION_FLOW_LOG)" npx expo start --dev-client
 
 android:
-	npx expo run:android
+	EXPO_PUBLIC_DEV_API_BASE_URL="$(DEV_API_BASE_URL)" EXPO_PUBLIC_INSPECTION_FLOW_LOG="$(DEV_INSPECTION_FLOW_LOG)" npx expo run:android
 
 ios:
-	npx expo run:ios
+	EXPO_PUBLIC_DEV_API_BASE_URL="$(DEV_API_BASE_URL)" EXPO_PUBLIC_INSPECTION_FLOW_LOG="$(DEV_INSPECTION_FLOW_LOG)" npx expo run:ios
 
 prebuild:
 	npx expo prebuild
 
 build-android-apk:
-	cd android && NODE_ENV=production EXPO_PUBLIC_API_BASE_URL="$(PROD_API_BASE_URL)" EXPO_PUBLIC_INSPECTION_FLOW_LOG=0 ./gradlew :app:assembleRelease
+	cd android && NODE_ENV=production EXPO_PUBLIC_RELEASE_API_BASE_URL="$(PROD_API_BASE_URL)" EXPO_PUBLIC_INSPECTION_FLOW_LOG=0 ./gradlew :app:assembleRelease
 	@mkdir -p dist
 	cp "$(APK_PATH)" "$(APK_DIST_PATH)"
 	@echo "Wrote $(APK_DIST_PATH)"

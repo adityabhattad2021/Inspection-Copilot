@@ -36,7 +36,7 @@ The demo plan has five focused steps:
 4. Dashboard and odometer reading
 5. Engine sound condition
 
-Photo steps can auto-capture after the realtime voice agent reports a hold/ready decision. The LHS front door step asks for a structured observation after photo capture. The engine step guides the Jockey through idle, gentle rev, exhaust listening, and final answer submission.
+Photo steps can auto-capture after the realtime voice agent reports a hold/ready decision. The LHS front door step captures photo evidence only. The engine step guides the Jockey through idle, gentle rev, exhaust listening, and final answer submission.
 
 ## Repository Layout
 
@@ -54,7 +54,7 @@ Photo steps can auto-capture after the realtime voice agent reports a hold/ready
 
 ## Backend
 
-The backend is a FastAPI app with local SQLite persistence. It owns vehicle lookup, profiles, sessions, AI stub endpoints, photo evidence, debug flow logs, and the Pipecat/OpenAI realtime voice runtime.
+The backend is a FastAPI app with local SQLite persistence. It owns vehicle lookup, profiles, sessions, AI stub endpoints, photo evidence, debug flow logs, and the Pipecat realtime voice runtime.
 
 Important backend modules:
 
@@ -66,7 +66,7 @@ Important backend modules:
 - `backend/app/routes/evidence.py` stores sample or realtime photo evidence.
 - `backend/app/routes/debug.py` stores dev-only inspection flow logs.
 - `backend/app/routes/voice.py` exposes realtime voice configuration and transcript fallback.
-- `backend/app/voice/*` owns the Pipecat/OpenAI realtime boundary.
+- `backend/app/voice/*` owns the Pipecat Gemini/OpenAI realtime boundary.
 - `backend/app/database/*` owns local SQLite schema, queries, and seed data.
 
 ## Mobile
@@ -95,7 +95,7 @@ See [mobile/README.md](mobile/README.md) for mobile-specific details.
 - Node.js and npm for the Expo app.
 - Android Studio, Android SDK, and `adb` for the Android development client.
 - An Android device or emulator for the full camera/voice demo.
-- `OPENAI_API_KEY` for realtime voice readiness.
+- `GOOGLE_API_KEY` or `GEMINI_API_KEY` for the default Gemini realtime voice runtime.
 
 ## Quick Start
 
@@ -127,9 +127,17 @@ make mobile-android
 Backend variables:
 
 ```bash
-OPENAI_API_KEY=sk-...
-OPENAI_REALTIME_MODEL=gpt-realtime-2
-OPENAI_REALTIME_VOICE=alloy
+VOICE_LLM_PROVIDER=gemini
+GOOGLE_API_KEY=...
+GOOGLE_MODEL=models/gemini-3.1-flash-live-preview
+GOOGLE_VOICE_ID=Charon
+
+# One-line rollback:
+# VOICE_LLM_PROVIDER=openai
+# OPENAI_API_KEY=sk-...
+# OPENAI_REALTIME_MODEL=gpt-realtime-2
+# OPENAI_REALTIME_VOICE=alloy
+
 JOCKEY_COPILOT_VOICE_BASE_URL=http://localhost:8000
 JOCKEY_COPILOT_DB_PATH=backend/.local/jockey_copilot.sqlite3
 JOCKEY_COPILOT_EVIDENCE_DIR=backend/.local/evidence
@@ -139,15 +147,19 @@ JOCKEY_COPILOT_FLOW_LOG_PATH=backend/.local/inspection-flow.ndjson
 Mobile variables:
 
 ```bash
-EXPO_PUBLIC_API_BASE_URL=http://localhost:8000
+EXPO_PUBLIC_DEV_API_BASE_URL=http://localhost:8000
+EXPO_PUBLIC_RELEASE_API_BASE_URL=http://65.0.101.246
 EXPO_PUBLIC_INSPECTION_FLOW_LOG=0
 ```
 
 Notes:
 
-- `OPENAI_API_KEY` is required for `/voice/config` to report `ready: true`.
-- The mobile app defaults to `http://localhost:8000` if `EXPO_PUBLIC_API_BASE_URL` is not set.
-- `EXPO_PUBLIC_INSPECTION_FLOW_LOG=0` disables dev-only inspection flow logging.
+- Gemini Live is the default voice LLM provider. Set `VOICE_LLM_PROVIDER=openai` to roll back without changing mobile code.
+- `GOOGLE_API_KEY` or `GEMINI_API_KEY` is required for Gemini `/voice/config` to report `ready: true`.
+- `OPENAI_API_KEY` is required only when `VOICE_LLM_PROVIDER=openai`.
+- Development builds default to `http://localhost:8000` and can be overridden with `EXPO_PUBLIC_DEV_API_BASE_URL`.
+- Release builds default to the deployed backend and can be overridden with `EXPO_PUBLIC_RELEASE_API_BASE_URL`.
+- `EXPO_PUBLIC_INSPECTION_FLOW_LOG=0` disables dev-only inspection flow logging; the Makefile disables it for normal dev runs.
 - Do not commit real secrets.
 
 ## Root Commands
@@ -242,7 +254,7 @@ make mobile-android
 
 - Backend is not responding: run `make backend-dev`, then `make backend-check`.
 - Android app cannot reach backend: run `make android-ready` and keep the backend on port `8000`.
-- Voice config is not ready: set `OPENAI_API_KEY` in `backend/.env` or the shell running `make backend-dev`.
+- Voice config is not ready: set `GOOGLE_API_KEY` in `backend/.env` or the shell running `make backend-dev`; for rollback, set `VOICE_LLM_PROVIDER=openai` and `OPENAI_API_KEY`.
 - Dev flow logs are too noisy: start mobile with `EXPO_PUBLIC_INSPECTION_FLOW_LOG=0`.
 - Demo data is missing or stale: run `make backend-db-reset`.
 

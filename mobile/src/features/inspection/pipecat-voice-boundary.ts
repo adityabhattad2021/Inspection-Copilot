@@ -260,6 +260,22 @@ function selectBackCamera(cameras: readonly MediaDeviceInfo[]) {
   );
 }
 
+const ANDROID_SPEAKERPHONE_DEVICE_ID = "SPEAKERPHONE";
+
+export function selectSpeakerphone(speakers: readonly MediaDeviceInfo[]) {
+  return (
+    speakers.find(
+      (speaker) => speaker.deviceId === ANDROID_SPEAKERPHONE_DEVICE_ID,
+    ) ??
+    speakers.find(
+      (speaker) =>
+        /speaker/i.test(speaker.label) &&
+        !/bluetooth|earpiece|wired/i.test(speaker.label),
+    ) ??
+    null
+  );
+}
+
 const INSPECTION_CONTROL_MESSAGE_TYPE = "inspection-control";
 const INSPECTION_CONTROL_PHOTO_CHUNK_MESSAGE_TYPE =
   "inspection-control-photo-chunk";
@@ -370,6 +386,41 @@ function createNativePipecatVoiceDriver(
       });
     } else {
       logInspectionRtvi("prefer-back-camera:no-back-camera-found");
+    }
+  }
+
+  async function preferSpeakerphone() {
+    if (!nativeTransport) {
+      return;
+    }
+
+    try {
+      const speakers = await nativeTransport.getAllSpeakers();
+      const speakerphone = selectSpeakerphone(speakers);
+      logInspectionRtvi("prefer-speakerphone:start", {
+        availableSpeakers: speakers.map((speaker) => ({
+          deviceId: speaker.deviceId,
+          label: speaker.label,
+        })),
+        selectedDeviceId: speakerphone?.deviceId ?? null,
+      });
+
+      if (!speakerphone) {
+        logInspectionRtvi("prefer-speakerphone:no-speakerphone-found");
+        return;
+      }
+
+      nativeTransport.updateSpeaker(speakerphone.deviceId);
+      await wait(150);
+      logInspectionRtvi("prefer-speakerphone:selected", {
+        deviceId: speakerphone.deviceId,
+        label: speakerphone.label,
+        selectedSpeaker: nativeTransport.selectedSpeaker,
+      });
+    } catch (error) {
+      logInspectionRtvi("prefer-speakerphone:error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -577,6 +628,7 @@ function createNativePipecatVoiceDriver(
       });
 
       await client.initDevices();
+      await preferSpeakerphone();
       await preferBackCamera();
       emitLocalVideoTrack();
       await client.startBotAndConnect({
@@ -585,6 +637,7 @@ function createNativePipecatVoiceDriver(
           body: buildStartRequestBody(request),
         },
       });
+      await preferSpeakerphone();
       emitLocalVideoTrack();
     },
     async disconnect() {

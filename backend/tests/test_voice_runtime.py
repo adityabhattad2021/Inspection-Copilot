@@ -45,6 +45,11 @@ def isolated_sqlite_db(monkeypatch, tmp_path):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_REALTIME_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_REALTIME_VOICE", raising=False)
+    monkeypatch.delenv("VOICE_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_MODEL", raising=False)
+    monkeypatch.delenv("GOOGLE_VOICE_ID", raising=False)
     monkeypatch.delenv("JOCKEY_COPILOT_VOICE_BASE_URL", raising=False)
     monkeypatch.delenv("JOCKEY_COPILOT_ICE_SERVERS_JSON", raising=False)
     clear_database()
@@ -82,7 +87,7 @@ def _capture_step(session_id: str, step_id: str, sample_key: str):
     return response.json()
 
 
-def test_voice_config_exposes_pipecat_start_url_without_requiring_mobile_secret(
+def test_voice_config_defaults_to_gemini_live_without_requiring_mobile_secret(
     monkeypatch,
 ):
     response = client.get("/voice/config")
@@ -91,23 +96,24 @@ def test_voice_config_exposes_pipecat_start_url_without_requiring_mobile_secret(
     body = response.json()
     assert body == {
         "provider": "pipecat",
+        "llmProvider": "gemini",
         "transport": "small-webrtc",
         "startUrl": "http://localhost:8000/start",
-        "model": "gpt-realtime-2",
-        "voice": "alloy",
+        "model": "models/gemini-3.1-flash-live-preview",
+        "voice": "Charon",
         "ready": False,
-        "missing": ["OPENAI_API_KEY"],
+        "missing": ["GOOGLE_API_KEY"],
     }
 
 
-def test_voice_config_loads_openai_key_from_backend_env_file(monkeypatch, tmp_path):
+def test_voice_config_loads_gemini_key_from_backend_env_file(monkeypatch, tmp_path):
     env_file = tmp_path / ".env"
     env_file.write_text(
         "\n".join(
             [
-                "OPENAI_API_KEY=sk-test-local",
-                "OPENAI_REALTIME_MODEL=gpt-realtime-local",
-                "OPENAI_REALTIME_VOICE=ash",
+                "GOOGLE_API_KEY=google-test-local",
+                "GOOGLE_MODEL=models/gemini-test-live",
+                "GOOGLE_VOICE_ID=Puck",
                 "JOCKEY_COPILOT_VOICE_BASE_URL=http://127.0.0.1:8787",
             ]
         ),
@@ -119,9 +125,35 @@ def test_voice_config_loads_openai_key_from_backend_env_file(monkeypatch, tmp_pa
 
     assert config.ready is True
     assert config.missing == []
+    assert config.llm_provider == "gemini"
+    assert config.model == "models/gemini-test-live"
+    assert config.voice == "Puck"
+    assert config.start_url == "http://127.0.0.1:8787/start"
+
+
+def test_voice_config_can_roll_back_to_openai_with_one_provider_env(monkeypatch):
+    monkeypatch.setenv("VOICE_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-local")
+    monkeypatch.setenv("OPENAI_REALTIME_MODEL", "gpt-realtime-local")
+    monkeypatch.setenv("OPENAI_REALTIME_VOICE", "ash")
+
+    config = get_voice_runtime_config()
+
+    assert config.ready is True
+    assert config.missing == []
+    assert config.llm_provider == "openai"
     assert config.model == "gpt-realtime-local"
     assert config.voice == "ash"
-    assert config.start_url == "http://127.0.0.1:8787/start"
+
+
+def test_voice_config_accepts_gemini_api_key_alias(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-test-local")
+
+    config = get_voice_runtime_config()
+
+    assert config.ready is True
+    assert config.missing == []
+    assert config.llm_provider == "gemini"
 
 
 def test_voice_ice_servers_default_to_public_stun():
@@ -392,7 +424,6 @@ def test_voice_tools_expose_frame_observation_and_completion_functions():
 
     assert [tool.name for tool in tools.standard_tools] == [
         "accept_photo",
-        "record_door_observation",
         "record_engine_observation",
         "complete_inspection",
     ]
@@ -426,6 +457,16 @@ def test_voice_transport_params_keep_camera_feed_off_the_voice_model():
     assert params.audio_out_enabled is True
     assert params.video_in_enabled is False
     assert params.audio_in_sample_rate == 24000
+    assert params.audio_out_sample_rate == 24000
+
+
+def test_gemini_voice_transport_uses_google_live_audio_sample_rates():
+    params = build_voice_transport_params(llm_provider="gemini")
+
+    assert params.audio_in_enabled is True
+    assert params.audio_out_enabled is True
+    assert params.video_in_enabled is False
+    assert params.audio_in_sample_rate == 16000
     assert params.audio_out_sample_rate == 24000
 
 
@@ -562,6 +603,37 @@ def test_accept_photo_evidence_stores_pending_photo_and_advances_step(tmp_path, 
     }
 
 
+def test_accept_photo_evidence_advances_lhs_door_without_observation_prompt(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("JOCKEY_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    session_id = _create_started_session()
+    _capture_step(session_id, "front-main", "front-main-good")
+
+    result = accept_photo_evidence(
+        session_id=session_id,
+        step_id="lhs-front-door",
+        pending_photo=PendingPhotoReview(
+            image_bytes=b"\xff\xd8lhs-door-photo\xff\xd9",
+            mime_type="image/jpeg",
+            source_uri="file:///cache/lhs-front-door.jpg",
+        ),
+        guidance="Photo accepted. Moving to the next inspection step.",
+        visible_parts=["left front door", "door handle"],
+    )
+
+    assert result["type"] == "photo_acceptance"
+    assert result["accepted"] is True
+    assert result["completedStepId"] == "lhs-front-door"
+    assert result["nextStep"]["id"] == "rear-main"
+    assert result["message"] == "Photo accepted. Moving to the next inspection step."
+    assert "scratch" not in result["message"].lower()
+    assert "dent" not in result["message"].lower()
+    assert result["session"]["plan"]["steps"][1]["status"] == "complete"
+    assert result["session"]["plan"]["steps"][2]["status"] == "active"
+
+
 def test_voice_accept_photo_handler_uses_pending_photo_and_notifies_mobile(tmp_path, monkeypatch):
     monkeypatch.setenv("JOCKEY_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
     session_id = _create_started_session()
@@ -656,43 +728,11 @@ def test_voice_frame_handler_notifies_mobile_for_adjust_decision():
     assert sent_tool_results == [("call_frame_adjust", tool_results[0], False)]
 
 
-def test_voice_observation_handler_notifies_mobile_and_requests_response():
+def test_voice_handlers_do_not_expose_lhs_door_observation_tool():
     session_id = _create_started_session()
-    _capture_step(session_id, "front-main", "front-main-good")
-    _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
-    sent_voice_results = []
-    sent_tool_results = []
-    tool_results = []
+    handlers = build_voice_function_handlers(session_id)
 
-    async def send_voice_result(result):
-        sent_voice_results.append(result)
-
-    async def send_tool_result(tool_call_id, result, create_response):
-        sent_tool_results.append((tool_call_id, result, create_response))
-
-    class Params:
-        tool_call_id = "call_door_observation"
-        arguments = {
-            "stepId": "lhs-front-door",
-            "transcript": "Minor scratch near the handle, no dent.",
-        }
-
-        async def result_callback(self, result):
-            tool_results.append(result)
-
-    handlers = build_voice_function_handlers(
-        session_id,
-        on_tool_result=send_tool_result,
-        on_voice_result=send_voice_result,
-    )
-
-    asyncio.run(handlers["record_door_observation"](Params()))
-
-    assert tool_results[0]["type"] == "observation"
-    assert tool_results[0]["nextStep"]["id"] == "rear-main"
-    assert tool_results[0]["session"]["plan"]["steps"][1]["status"] == "complete"
-    assert sent_voice_results == tool_results
-    assert sent_tool_results == [("call_door_observation", tool_results[0], True)]
+    assert "record_door_observation" not in handlers
 
 
 def test_voice_engine_handler_records_ai_interpreted_answers():

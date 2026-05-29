@@ -7,18 +7,30 @@ from typing import Any
 from dotenv import load_dotenv
 
 
-DEFAULT_REALTIME_MODEL = "gpt-realtime-2"
-DEFAULT_REALTIME_VOICE = "alloy"
+VOICE_LLM_PROVIDER_GEMINI = "gemini"
+VOICE_LLM_PROVIDER_OPENAI = "openai"
+VOICE_LLM_PROVIDERS = {VOICE_LLM_PROVIDER_GEMINI, VOICE_LLM_PROVIDER_OPENAI}
+
+DEFAULT_VOICE_LLM_PROVIDER = VOICE_LLM_PROVIDER_GEMINI
+DEFAULT_GEMINI_LIVE_MODEL = "models/gemini-3.1-flash-live-preview"
+DEFAULT_GEMINI_LIVE_VOICE = "Charon"
+DEFAULT_OPENAI_REALTIME_MODEL = "gpt-realtime-2"
+DEFAULT_OPENAI_REALTIME_VOICE = "alloy"
 DEFAULT_VOICE_BASE_URL = "http://localhost:8000"
 DEFAULT_VOICE_ICE_SERVERS: list[dict[str, Any]] = [
     {"urls": ["stun:stun.l.google.com:19302"]},
 ]
 DEFAULT_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
+# Backwards-compatible names for existing imports and local scripts.
+DEFAULT_REALTIME_MODEL = DEFAULT_OPENAI_REALTIME_MODEL
+DEFAULT_REALTIME_VOICE = DEFAULT_OPENAI_REALTIME_VOICE
+
 
 @dataclass(frozen=True)
 class VoiceRuntimeConfig:
     provider: str
+    llm_provider: str
     transport: str
     start_url: str
     model: str
@@ -30,6 +42,21 @@ class VoiceRuntimeConfig:
 def load_voice_environment() -> None:
     env_file = os.environ.get("JOCKEY_COPILOT_ENV_FILE")
     load_dotenv(dotenv_path=env_file or DEFAULT_ENV_FILE, override=False)
+
+
+def get_google_api_key() -> str | None:
+    load_voice_environment()
+    return os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+
+
+def get_voice_llm_provider() -> str:
+    load_voice_environment()
+    provider = os.environ.get("VOICE_LLM_PROVIDER", DEFAULT_VOICE_LLM_PROVIDER)
+    normalized_provider = provider.strip().lower()
+    if normalized_provider not in VOICE_LLM_PROVIDERS:
+        supported = ", ".join(sorted(VOICE_LLM_PROVIDERS))
+        raise ValueError(f"VOICE_LLM_PROVIDER must be one of: {supported}")
+    return normalized_provider
 
 
 def _normalize_ice_server(candidate: Any) -> dict[str, Any]:
@@ -72,16 +99,27 @@ def get_voice_runtime_config() -> VoiceRuntimeConfig:
 
     base_url = os.environ.get("JOCKEY_COPILOT_VOICE_BASE_URL", DEFAULT_VOICE_BASE_URL)
     start_url = f"{base_url.rstrip('/')}/start"
-    missing = []
-    if not os.environ.get("OPENAI_API_KEY"):
-        missing.append("OPENAI_API_KEY")
+    llm_provider = get_voice_llm_provider()
+
+    missing: list[str] = []
+    if llm_provider == VOICE_LLM_PROVIDER_GEMINI:
+        if not get_google_api_key():
+            missing.append("GOOGLE_API_KEY")
+        model = os.environ.get("GOOGLE_MODEL", DEFAULT_GEMINI_LIVE_MODEL)
+        voice = os.environ.get("GOOGLE_VOICE_ID", DEFAULT_GEMINI_LIVE_VOICE)
+    else:
+        if not os.environ.get("OPENAI_API_KEY"):
+            missing.append("OPENAI_API_KEY")
+        model = os.environ.get("OPENAI_REALTIME_MODEL", DEFAULT_OPENAI_REALTIME_MODEL)
+        voice = os.environ.get("OPENAI_REALTIME_VOICE", DEFAULT_OPENAI_REALTIME_VOICE)
 
     return VoiceRuntimeConfig(
         provider="pipecat",
+        llm_provider=llm_provider,
         transport="small-webrtc",
         start_url=start_url,
-        model=os.environ.get("OPENAI_REALTIME_MODEL", DEFAULT_REALTIME_MODEL),
-        voice=os.environ.get("OPENAI_REALTIME_VOICE", DEFAULT_REALTIME_VOICE),
+        model=model,
+        voice=voice,
         ready=len(missing) == 0,
         missing=missing,
     )

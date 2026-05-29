@@ -8,14 +8,16 @@ import {
 const LOCAL_API_BASE_URL = "http://localhost:8000";
 const PRODUCTION_API_BASE_URL = "http://65.0.101.246";
 
-const configuredApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.replace(
-  /\/$/,
-  "",
-);
+function normalizeBaseUrl(url: string | undefined) {
+  return url?.replace(/\/$/, "");
+}
 
 export const API_BASE_URL =
-  configuredApiBaseUrl ??
-  (__DEV__ ? LOCAL_API_BASE_URL : PRODUCTION_API_BASE_URL);
+  __DEV__
+    ? (normalizeBaseUrl(process.env.EXPO_PUBLIC_DEV_API_BASE_URL) ??
+      LOCAL_API_BASE_URL)
+    : (normalizeBaseUrl(process.env.EXPO_PUBLIC_RELEASE_API_BASE_URL) ??
+      PRODUCTION_API_BASE_URL);
 
 type ApiErrorCode = "HTTP_ERROR" | "NETWORK_ERROR" | "INVALID_RESPONSE";
 
@@ -139,6 +141,7 @@ export type CompleteInspectionSessionResponse = {
 
 export type VoiceRuntimeConfig = {
   provider: "pipecat";
+  llmProvider: "gemini" | "openai";
   transport: "small-webrtc";
   startUrl: string;
   model: string;

@@ -5,10 +5,12 @@ __pycache__/
 .venv/
 .env
 .env.*
+!.env.example
 
 backend/.local/
 backend/.env
 backend/.env.*
+!backend/.env.example
 backend/*.db
 backend/*.sqlite
 backend/*.sqlite3

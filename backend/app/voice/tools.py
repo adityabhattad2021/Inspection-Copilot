@@ -19,7 +19,6 @@ from app.database import (
     save_evidence_item,
     save_structured_observation,
     set_session_status,
-    set_step_status,
 )
 from app.routes.sessions import InspectionStep, SessionResponse
 from app.services.ai_stub import structure_observation
@@ -148,22 +147,6 @@ def accept_photo_evidence(
         metadata=metadata,
         created_at=now,
     )
-
-    if step.id == "lhs-front-door":
-        set_step_status(session_id, step.id, "needs_observation", now)
-        updated_session = _load_session(session_id)
-        return {
-            "type": "photo_acceptance",
-            "accepted": True,
-            "evidenceId": evidence_id,
-            "completedStepId": step.id,
-            "nextStep": None,
-            "message": (
-                "I see a possible mark near the door handle. Is it a scratch, "
-                "dent, rust, or dirt?"
-            ),
-            "session": updated_session.model_dump(by_alias=True),
-        }
 
     next_step_id = complete_step_and_activate_next(session_id, step.id, now)
     updated_session = _load_session(session_id)
@@ -406,15 +389,6 @@ def build_voice_tools() -> ToolsSchema:
                 required=["stepId"],
             ),
             FunctionSchema(
-                name="record_door_observation",
-                description="Save a spoken LHS door damage answer to the inspection.",
-                properties={
-                    "transcript": transcript_property,
-                    "stepId": step_property,
-                },
-                required=["transcript"],
-            ),
-            FunctionSchema(
                 name="record_engine_observation",
                 description=(
                     "Save AI-interpreted spoken engine Q&A answers to the "
@@ -523,18 +497,6 @@ def build_voice_function_handlers(
         if on_voice_result:
             await on_voice_result(result)
 
-    async def record_observation(params: FunctionCallParams):
-        transcript = str(params.arguments.get("transcript", "")).strip()
-        step_id = params.arguments.get("stepId")
-        result = record_voice_observation(
-            session_id=session_id,
-            step_id=str(step_id) if step_id else None,
-            transcript=transcript,
-        )
-        await publish_tool_result(params, result)
-        if on_voice_result:
-            await on_voice_result(result)
-
     async def record_engine_observation(params: FunctionCallParams):
         arguments = params.arguments
         answers = {
@@ -569,7 +531,6 @@ def build_voice_function_handlers(
     return {
         "accept_photo": accept_photo,
         "record_frame_intervention": record_frame,
-        "record_door_observation": record_observation,
         "record_engine_observation": record_engine_observation,
         "complete_inspection": complete_inspection,
     }

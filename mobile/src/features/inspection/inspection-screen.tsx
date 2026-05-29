@@ -28,6 +28,7 @@ import { CopilotStatusCard } from "@/src/features/inspection/copilot-status-card
 import { logInspectionFlowEvent } from "@/src/features/inspection/inspection-debug-log";
 import {
   EngineGuidedCheck,
+  getEngineAnswerTranscript,
   type EngineQnaAnswers,
 } from "@/src/features/inspection/engine-guided-check";
 import {
@@ -83,15 +84,6 @@ const COMPLETION_NAVIGATION_DWELL_MS = 650;
 const COMPLETION_SPEECH_TIMEOUT_MS = 12000;
 const INSPECTION_SCREEN_LOG_PREFIX = "[inspection-screen]";
 const SHOULD_LOG_INSPECTION_SCREEN_EVENTS = __DEV__;
-
-function getEngineAnswerTranscript(answers: EngineQnaAnswers) {
-  return [
-    `Knocking: ${answers.knocking}.`,
-    `Rattling: ${answers.rattling}.`,
-    `Idle vibration: ${answers.idleVibration}.`,
-    `Exhaust sound: ${answers.exhaustSound}.`,
-  ].join(" ");
-}
 
 function logInspectionScreen(event: string, data?: unknown) {
   if (!SHOULD_LOG_INSPECTION_SCREEN_EVENTS) {

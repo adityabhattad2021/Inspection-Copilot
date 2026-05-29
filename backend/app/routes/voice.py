@@ -14,6 +14,7 @@ class VoiceConfigResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     provider: str
+    llm_provider: str = Field(alias="llmProvider")
     transport: str
     start_url: str = Field(alias="startUrl")
     model: str
@@ -45,6 +46,7 @@ def get_voice_config() -> VoiceConfigResponse:
     config = get_voice_runtime_config()
     return VoiceConfigResponse(
         provider=config.provider,
+        llm_provider=config.llm_provider,
         transport=config.transport,
         start_url=config.start_url,
         model=config.model,

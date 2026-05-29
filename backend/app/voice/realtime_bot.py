@@ -10,7 +10,12 @@ from pipecat.services.openai.realtime import events
 from pipecat.transports.base_transport import TransportParams
 
 from app.database import load_session_payload
-from app.voice.config import get_voice_runtime_config
+from app.voice.config import (
+    VOICE_LLM_PROVIDER_GEMINI,
+    VOICE_LLM_PROVIDER_OPENAI,
+    get_google_api_key,
+    get_voice_runtime_config,
+)
 from app.voice.prompts import build_realtime_instruction
 from app.voice.tools import (
     PendingPhotoReview,
@@ -24,6 +29,12 @@ LANGUAGE_TRANSCRIPTION_CODES = {
     "hi-IN": "hi",
     "hinglish": "hi",
     "kn-IN": "kn",
+}
+GEMINI_LANGUAGE_CODES = {
+    "en-IN": "en-IN",
+    "hi-IN": "hi-IN",
+    "hinglish": "hi-IN",
+    "kn-IN": "kn-IN",
 }
 INSPECTION_CONTROL_ACK_TYPE = "inspection_control_ack"
 INSPECTION_CONTROL_ERROR_TYPE = "inspection_control_error"
@@ -82,6 +93,10 @@ def build_realtime_session_properties(
         tools=tools,
         tool_choice="auto",
     )
+
+
+def resolve_gemini_language_code(language_code: str | None) -> str:
+    return GEMINI_LANGUAGE_CODES.get(language_code or "en-IN", "en-IN")
 
 
 def build_initial_realtime_messages(_instruction: str) -> list[dict[str, str]]:
@@ -172,11 +187,18 @@ def build_voice_rtvi_observer_params() -> RTVIObserverParams:
     return RTVIObserverParams(user_llm_enabled=False)
 
 
-def build_voice_transport_params() -> TransportParams:
+def build_voice_transport_params(
+    *,
+    llm_provider: str = VOICE_LLM_PROVIDER_OPENAI,
+) -> TransportParams:
+    audio_in_sample_rate = 16000
+    if llm_provider == VOICE_LLM_PROVIDER_OPENAI:
+        audio_in_sample_rate = 24000
+
     return TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
-        audio_in_sample_rate=24000,
+        audio_in_sample_rate=audio_in_sample_rate,
         audio_out_sample_rate=24000,
         video_in_enabled=False,
     )
@@ -237,7 +259,11 @@ def resolve_realtime_photo_transfer(
 
 
 async def bot(runner_args: Any):
-    from pipecat.frames.frames import LLMContextFrame
+    from pipecat.frames.frames import (
+        InputTextRawFrame,
+        LLMContextFrame,
+        LLMMessagesAppendFrame,
+    )
     from pipecat.pipeline.pipeline import Pipeline
     from pipecat.pipeline.runner import PipelineRunner
     from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -245,10 +271,6 @@ async def bot(runner_args: Any):
     from pipecat.processors.aggregators.llm_context import LLMContext
     from pipecat.services.openai.realtime.llm import OpenAIRealtimeLLMService
     from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
-
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is required for realtime voice")
 
     body = _runner_body(runner_args)
     session_id = resolve_runner_session_id(runner_args)
@@ -259,34 +281,68 @@ async def bot(runner_args: Any):
         raise RuntimeError(f"Inspection session not found: {session_id}")
 
     runtime = get_voice_runtime_config()
+    if runtime.llm_provider == VOICE_LLM_PROVIDER_GEMINI:
+        api_key = get_google_api_key()
+        if not api_key:
+            raise RuntimeError("GOOGLE_API_KEY is required for Gemini realtime voice")
+    elif runtime.llm_provider == VOICE_LLM_PROVIDER_OPENAI:
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is required for OpenAI realtime voice")
+    else:
+        raise RuntimeError(f"Unsupported voice LLM provider: {runtime.llm_provider}")
+
     tools = build_voice_tools()
     instruction = build_realtime_instruction(
         session=session_payload,
         jockey_name=str(jockey_name) if jockey_name else None,
         language_code=str(language_code) if language_code else None,
     )
-    session_properties = build_realtime_session_properties(
-        instruction=instruction,
-        language_code=str(language_code) if language_code else None,
-        tools=tools,
-        voice=runtime.voice,
-    )
 
     transport = SmallWebRTCTransport(
         runner_args.webrtc_connection,
-        params=build_voice_transport_params(),
+        params=build_voice_transport_params(llm_provider=runtime.llm_provider),
     )
-    llm = OpenAIRealtimeLLMService(
-        api_key=api_key,
-        model=runtime.model,
-        session_properties=session_properties,
-        video_frame_detail="low",
-    )
-    context = LLMContext(
-        messages=build_initial_realtime_messages(instruction),
-        tools=tools,
-        tool_choice="auto",
-    )
+
+    if runtime.llm_provider == VOICE_LLM_PROVIDER_GEMINI:
+        from pipecat.services.google.gemini_live.llm import (
+            GeminiLiveLLMService,
+            GeminiModalities,
+        )
+
+        llm = GeminiLiveLLMService(
+            api_key=api_key,
+            tools=tools,
+            settings=GeminiLiveLLMService.Settings(
+                model=runtime.model,
+                voice=runtime.voice,
+                modalities=GeminiModalities.AUDIO,
+                language=resolve_gemini_language_code(
+                    str(language_code) if language_code else None
+                ),
+                system_instruction=instruction,
+            ),
+        )
+        context = LLMContext(messages=build_initial_realtime_messages(instruction))
+    else:
+        session_properties = build_realtime_session_properties(
+            instruction=instruction,
+            language_code=str(language_code) if language_code else None,
+            tools=tools,
+            voice=runtime.voice,
+        )
+        llm = OpenAIRealtimeLLMService(
+            api_key=api_key,
+            model=runtime.model,
+            session_properties=session_properties,
+            video_frame_detail="low",
+        )
+        context = LLMContext(
+            messages=build_initial_realtime_messages(instruction),
+            tools=tools,
+            tool_choice="auto",
+        )
+
     rtvi = RTVIProcessor(transport=transport)
 
     async def send_capture_command(command: dict[str, Any]) -> None:
@@ -299,6 +355,10 @@ async def bot(runner_args: Any):
         await rtvi.send_server_message(result)
 
     async def inject_realtime_user_text(content: str) -> None:
+        if runtime.llm_provider == VOICE_LLM_PROVIDER_GEMINI:
+            await task.queue_frame(InputTextRawFrame(text=content))
+            return
+
         item_event, response_event = build_realtime_text_events(content)
         await llm.send_client_event(item_event)
         await llm.send_client_event(response_event)
@@ -307,6 +367,21 @@ async def bot(runner_args: Any):
         content: str,
         image_data_url: str,
     ) -> None:
+        if runtime.llm_provider == VOICE_LLM_PROVIDER_GEMINI:
+            await task.queue_frame(
+                LLMMessagesAppendFrame(
+                    messages=[
+                        LLMContext.create_image_url_message(
+                            role="user",
+                            url=image_data_url,
+                            text=content,
+                        )
+                    ],
+                    run_llm=True,
+                )
+            )
+            return
+
         item_event, response_event = build_realtime_photo_review_events(
             content,
             image_data_url,
@@ -339,7 +414,11 @@ async def bot(runner_args: Any):
         get_pending_photo=get_pending_photo,
         on_capture_command=send_capture_command,
         on_frame_intervention=send_frame_intervention,
-        on_tool_result=send_realtime_tool_result,
+        on_tool_result=(
+            send_realtime_tool_result
+            if runtime.llm_provider == VOICE_LLM_PROVIDER_OPENAI
+            else None
+        ),
         on_voice_result=send_voice_result,
     ).items():
         llm.register_function(name, handler)
@@ -348,7 +427,11 @@ async def bot(runner_args: Any):
     task = PipelineTask(
         pipeline,
         params=PipelineParams(
-            audio_in_sample_rate=24000,
+            audio_in_sample_rate=(
+                16000
+                if runtime.llm_provider == VOICE_LLM_PROVIDER_GEMINI
+                else 24000
+            ),
             audio_out_sample_rate=24000,
             enable_metrics=False,
             enable_usage_metrics=False,
@@ -454,7 +537,8 @@ async def bot(runner_args: Any):
                 )
                 await inject_realtime_user_text(cleaned_content)
             logger.info(
-                "Injected inspection-control into OpenAI Realtime session_id={}",
+                "Injected inspection-control into {} realtime session_id={}",
+                runtime.llm_provider,
                 session_id,
             )
         except Exception as exc:

@@ -54,17 +54,10 @@ The app automatically captures the photo after the frame remains correct and sta
 
 "Front Main accepted."
 
-The copilot continues through selected checklist fields. It asks questions by voice, detects capture-quality issues, requests retakes when needed, and fills structured fields from spoken observations:
-
-Jockey: "Minor scratch on left front door, no dent."
-
-The app fills:
+The copilot continues through selected checklist fields. It detects capture-quality issues, requests retakes when needed, and captures photo evidence for the exterior checklist:
 
 - Section: Exterior & Tyres
 - Field: LHS front door
-- Issue: scratch
-- Severity: minor
-- Dent: no
 - Evidence: image attached
 
 For engine sound, the copilot guides the Jockey through the actual inspection: start the engine, listen at idle, briefly rev, listen near the bonnet and exhaust, then answer targeted questions such as whether there is knocking, rattling, abnormal vibration, smoke, or delayed start. The app can optionally record audio as an evidence artifact, and AI can mark whether that recording is usable, but the primary inspection signal is the Jockey's guided observation.
@@ -147,7 +140,7 @@ The hackathon demo should use a focused subset of this schema:
 - Field 127: Brake
 - Field 128: Suspension
 
-For the live demo, complete only the critical path fields needed to show the copilot loop: front exterior, rear exterior, LHS door damage, dashboard/odometer, and guided engine sound check.
+For the live demo, complete only the critical path fields needed to show the copilot loop: front exterior, LHS door photo evidence, rear exterior, dashboard/odometer, and guided engine sound check.
 
 ## Core Features
 
@@ -197,7 +190,6 @@ Example prompts:
 
 - "Move two steps back. The bumper is cropped."
 - "Tilt slightly down. Rear bumper is not fully visible."
-- "I see a possible mark near the door handle. Is it a scratch, dent, rust, or dirt?"
 - "Start the engine and listen near the bonnet for ten seconds. Tell me if you hear knocking, rattling, or abnormal vibration."
 
 ### 3. Vision QA
@@ -371,10 +363,9 @@ The demo and product story remain the same.
    - app auto-captures and accepts
 6. Rear Main:
    - copilot guides angle and auto-captures
-7. LHS Door Damage:
+7. LHS Door Photo:
    - copilot asks for close-up
-   - Jockey says "minor scratch, no dent"
-   - app fills structured field
+   - app auto-captures and accepts photo evidence
 8. Dashboard/Odometer:
    - copilot asks to increase light or move closer
    - app accepts odometer evidence

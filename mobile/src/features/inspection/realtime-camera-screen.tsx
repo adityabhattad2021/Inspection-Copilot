@@ -29,6 +29,9 @@ type RealtimeCameraScreenProps = {
   videoTrack: MediaStreamTrack | null;
 };
 
+const TOP_GLASS_CONTENT_HEIGHT = 168;
+const BOTTOM_GLASS_CONTENT_HEIGHT = 252;
+
 export function RealtimeCameraScreen({
   bottomInset,
   captureFlash,
@@ -93,8 +96,20 @@ export function RealtimeCameraScreen({
         </View>
       )}
 
-      <View pointerEvents="none" style={styles.scrimTop} />
-      <View pointerEvents="none" style={styles.scrimBottom} />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.scrimTop,
+          { height: topInset + TOP_GLASS_CONTENT_HEIGHT },
+        ]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.scrimBottom,
+          { height: bottomInset + BOTTOM_GLASS_CONTENT_HEIGHT },
+        ]}
+      />
 
       <View
         style={{
@@ -133,28 +148,12 @@ export function RealtimeCameraScreen({
       <View
         style={{
           bottom: bottomInset + spacing.lg,
+          gap: spacing.md,
           left: spacing.lg,
           position: "absolute",
           right: spacing.lg,
         }}
       >
-        <Pressable
-          disabled={isBusy || !videoTrack}
-          onPress={onCapturePhoto}
-          style={({ pressed }) => [
-            styles.captureButton,
-            (isBusy || !videoTrack) && styles.captureButtonDisabled,
-            pressed && styles.captureButtonPressed,
-          ]}
-        >
-          <View style={styles.captureRing}>
-            <View style={styles.captureCore} />
-          </View>
-          <Text selectable style={[typography.label, styles.captureButtonText]}>
-            {isBusy ? "Reviewing" : "Capture"}
-          </Text>
-        </Pressable>
-
         <View style={styles.instructionShell}>
           <View style={styles.instructionHeader}>
             <View style={styles.instructionAccent} />
@@ -171,6 +170,20 @@ export function RealtimeCameraScreen({
             </Text>
           ) : null}
         </View>
+
+        <Pressable
+          accessibilityLabel={isBusy ? "Reviewing capture" : "Capture photo"}
+          accessibilityRole="button"
+          disabled={isBusy || !videoTrack}
+          onPress={onCapturePhoto}
+          style={({ pressed }) => [
+            styles.captureButton,
+            (isBusy || !videoTrack) && styles.captureButtonDisabled,
+            pressed && styles.captureButtonPressed,
+          ]}
+        >
+          <View style={[styles.captureCore, isBusy && styles.captureCoreBusy]} />
+        </Pressable>
       </View>
 
       <Animated.View
@@ -196,16 +209,13 @@ const styles = StyleSheet.create({
   captureButton: {
     alignItems: "center",
     alignSelf: "center",
-    backgroundColor: colors.ai,
-    borderColor: "rgba(246, 247, 242, 0.78)",
-    borderCurve: "continuous",
+    backgroundColor: "rgba(246, 247, 242, 0.92)",
+    borderColor: colors.white,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing.sm,
-    minHeight: 58,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    borderWidth: 4,
+    height: 76,
+    justifyContent: "center",
+    width: 76,
   },
   captureButtonDisabled: {
     opacity: 0.56,
@@ -213,22 +223,14 @@ const styles = StyleSheet.create({
   captureButtonPressed: {
     transform: [{ scale: 0.98 }],
   },
-  captureButtonText: {
-    color: colors.text,
-  },
   captureCore: {
-    backgroundColor: colors.text,
+    backgroundColor: colors.ai,
     borderRadius: radius.pill,
-    height: 20,
-    width: 20,
+    height: 56,
+    width: 56,
   },
-  captureRing: {
-    alignItems: "center",
-    backgroundColor: "rgba(246, 247, 242, 0.68)",
-    borderRadius: radius.pill,
-    height: 32,
-    justifyContent: "center",
-    width: 32,
+  captureCoreBusy: {
+    backgroundColor: colors.warningSoft,
   },
   errorText: {
     color: colors.danger,
@@ -272,14 +274,12 @@ const styles = StyleSheet.create({
   scrimBottom: {
     backgroundColor: "rgba(16, 24, 32, 0.22)",
     bottom: 0,
-    height: 220,
     left: 0,
     position: "absolute",
     right: 0,
   },
   scrimTop: {
     backgroundColor: "rgba(16, 24, 32, 0.2)",
-    height: 180,
     left: 0,
     position: "absolute",
     right: 0,
