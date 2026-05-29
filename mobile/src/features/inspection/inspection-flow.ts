@@ -5,9 +5,6 @@ import {
 } from "@/src/api/client";
 import type { ProgressStep } from "@/src/components/ui";
 
-export const ENGINE_TRANSCRIPT =
-  "No knocking. Mild vibration at idle. Exhaust sounds normal.";
-
 export function getInspectionErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
     return error.message;
@@ -68,7 +65,7 @@ export function getInspectionStepChangedEvent(
         ? "Ask the jockey one short question to classify the visible door mark as scratch, dent, rust, or dirt, then keep listening for the answer."
         : "Ask the jockey one short question for the field observation, then keep listening for the answer."
       : step.kind === "engine-guided"
-        ? "Guide the engine-sound check one short step at a time, then ask for knocking, rattling, idle vibration, and exhaust sound."
+        ? "Guide the engine-sound check one short step at a time. The jockey can either tap the visible options or answer aloud; if they answer aloud, record knocking, rattling, idle vibration, and exhaust sound."
         : "Tell the jockey what to do for this step in your own short field-inspection words.";
 
   return [

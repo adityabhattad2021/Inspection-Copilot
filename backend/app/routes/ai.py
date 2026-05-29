@@ -14,7 +14,12 @@ from app.database import (
 )
 from app.routes.sessions import InspectionStep, SessionResponse
 from app.services.ai_stub import analyze_live_frame, structure_observation
-from app.services.engine_check import engine_issue_summary, structure_engine_answers
+from app.services.engine_check import (
+    engine_answers_to_transcript,
+    engine_issue_summary,
+    structure_engine_answer_options,
+    structure_engine_answers,
+)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -62,6 +67,7 @@ class EngineCheckRequest(BaseModel):
     session_id: str = Field(alias="sessionId")
     step_id: str = Field(alias="stepId")
     phase: str
+    answers: dict[str, Any] | None = None
     transcript: str | None = None
 
 
@@ -195,8 +201,12 @@ def engine_check_endpoint(request: EngineCheckRequest) -> EngineCheckResponse:
             session=session,
         )
 
-    transcript = request.transcript or ""
-    fields = structure_engine_answers(transcript)
+    if request.answers:
+        transcript = engine_answers_to_transcript(request.answers)
+        fields = structure_engine_answer_options(request.answers)
+    else:
+        transcript = request.transcript or ""
+        fields = structure_engine_answers(transcript)
     issue, severity = engine_issue_summary(fields)
     now = _utc_now()
     save_structured_observation(

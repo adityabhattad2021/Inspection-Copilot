@@ -26,9 +26,11 @@ import {
 import { getInspectionStepMedia } from "@/src/data/live-inspection-media";
 import { CopilotStatusCard } from "@/src/features/inspection/copilot-status-card";
 import { logInspectionFlowEvent } from "@/src/features/inspection/inspection-debug-log";
-import { EngineGuidedCheck } from "@/src/features/inspection/engine-guided-check";
 import {
-  ENGINE_TRANSCRIPT,
+  EngineGuidedCheck,
+  type EngineQnaAnswers,
+} from "@/src/features/inspection/engine-guided-check";
+import {
   findActiveInspectionStep,
   getCapturedPhotoReviewEvent,
   getInspectionErrorMessage,
@@ -65,12 +67,31 @@ type InspectionScreenProps = {
   sessionId: string;
 };
 
+type CompletionSpeechWait = {
+  resolve: () => void;
+  started: boolean;
+  timeout: ReturnType<typeof setTimeout>;
+};
+
 const GREETING_WORD_REVEAL_MS = 145;
 const GREETING_FINAL_DWELL_MS = 1000;
 const CAMERA_STEP_START_DELAY_MS = 450;
 const CAMERA_FRAME_JUDGE_RELEASE_DELAY_MS = 180;
+const AGENT_IDLE_POLL_MS = 160;
+const AGENT_IDLE_TIMEOUT_MS = 6000;
+const COMPLETION_NAVIGATION_DWELL_MS = 650;
+const COMPLETION_SPEECH_TIMEOUT_MS = 12000;
 const INSPECTION_SCREEN_LOG_PREFIX = "[inspection-screen]";
 const SHOULD_LOG_INSPECTION_SCREEN_EVENTS = __DEV__;
+
+function getEngineAnswerTranscript(answers: EngineQnaAnswers) {
+  return [
+    `Knocking: ${answers.knocking}.`,
+    `Rattling: ${answers.rattling}.`,
+    `Idle vibration: ${answers.idleVibration}.`,
+    `Exhaust sound: ${answers.exhaustSound}.`,
+  ].join(" ");
+}
 
 function logInspectionScreen(event: string, data?: unknown) {
   if (!SHOULD_LOG_INSPECTION_SCREEN_EVENTS) {
@@ -128,6 +149,11 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   const isFrameJudgementInFlightRef = useRef(false);
   const isScreenMountedRef = useRef(true);
   const lastLoggedScreenStateRef = useRef<string | null>(null);
+  const hasRequestedInspectionCompletionRef = useRef(false);
+  const completionRedirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const completionSpeechWaitRef = useRef<CompletionSpeechWait | null>(null);
 
   useEffect(
     () => () => {
@@ -162,6 +188,78 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       clearTimeout(cameraFrameJudgeReleaseTimerRef.current);
       cameraFrameJudgeReleaseTimerRef.current = null;
     }
+  }, []);
+
+  const clearCompletionRedirectTimer = useCallback(() => {
+    if (completionRedirectTimerRef.current) {
+      clearTimeout(completionRedirectTimerRef.current);
+      completionRedirectTimerRef.current = null;
+    }
+  }, []);
+
+  const resolveCompletionSpeechWait = useCallback((reason: string) => {
+    const pending = completionSpeechWaitRef.current;
+    if (!pending) {
+      return;
+    }
+
+    clearTimeout(pending.timeout);
+    completionSpeechWaitRef.current = null;
+    logInspectionScreen("completion-speech-wait:resolved", { reason });
+    logInspectionFlowEvent({
+      event: "completion_speech_wait_resolved",
+      payload: { reason },
+      screen: "voice_runtime",
+      sessionId,
+      stepId: activeStepRef.current?.id,
+    });
+    pending.resolve();
+  }, [sessionId]);
+
+  const startCompletionSpeechWait = useCallback(() => {
+    if (completionSpeechWaitRef.current) {
+      resolveCompletionSpeechWait("superseded");
+    }
+
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        resolveCompletionSpeechWait("timeout");
+      }, COMPLETION_SPEECH_TIMEOUT_MS);
+
+      completionSpeechWaitRef.current = {
+        resolve,
+        started: false,
+        timeout,
+      };
+    });
+  }, [resolveCompletionSpeechWait]);
+
+  const waitForAgentIdle = useCallback(() => {
+    const startedAt = Date.now();
+
+    return new Promise<void>((resolve) => {
+      const poll = () => {
+        const isIdle =
+          !isAgentSpeakingRef.current &&
+          activeAgentProcessingPhasesRef.current.size === 0;
+        const didTimeout = Date.now() - startedAt >= AGENT_IDLE_TIMEOUT_MS;
+
+        if (isIdle || didTimeout) {
+          if (didTimeout && !isIdle) {
+            logInspectionScreen("agent-idle-wait:timeout", {
+              activePhases: Array.from(activeAgentProcessingPhasesRef.current),
+              isAgentSpeaking: isAgentSpeakingRef.current,
+            });
+          }
+          resolve();
+          return;
+        }
+
+        setTimeout(poll, AGENT_IDLE_POLL_MS);
+      };
+
+      poll();
+    });
   }, []);
 
   const releaseFrameJudgementWhenAgentIdle = useCallback(() => {
@@ -266,6 +364,16 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           isAgentSpeakingRef.current = true;
           isFrameJudgementInFlightRef.current = true;
           agentUtteranceRef.current = "";
+          if (completionSpeechWaitRef.current) {
+            completionSpeechWaitRef.current.started = true;
+            logInspectionScreen("completion-speech-wait:started");
+            logInspectionFlowEvent({
+              event: "completion_speech_wait_started",
+              screen: "voice_runtime",
+              sessionId,
+              stepId: activeStepRef.current?.id,
+            });
+          }
           clearCameraFrameJudgeReleaseTimer();
           logInspectionScreen("agent-speaking-started");
           logInspectionFlowEvent({
@@ -325,6 +433,9 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           greetingGateRef.current = recordInspectionGreetingStopped(
             greetingGateRef.current,
           );
+          if (completionSpeechWaitRef.current?.started) {
+            resolveCompletionSpeechWait("agent_speaking_stopped");
+          }
           releaseFrameJudgementWhenAgentIdle();
           scheduleGreetingHandoff();
           return;
@@ -505,6 +616,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       clearGreetingFinishTimer,
       clearCameraFrameJudgeReleaseTimer,
       releaseFrameJudgementWhenAgentIdle,
+      resolveCompletionSpeechWait,
       scheduleGreetingHandoff,
       scheduleGreetingWordReveal,
       sessionId,
@@ -675,13 +787,17 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       greetingTargetMessageRef.current = "";
       updateGreetingDisplayMessage("");
       setErrorMessage(null);
+      setIsComplete(false);
       setLocalVideoTrack(null);
       setObservationTranscript("");
       clearGreetingFinishTimer();
       clearGreetingWordTimer();
       clearCameraFrameJudgeTimer();
+      clearCompletionRedirectTimer();
+      resolveCompletionSpeechWait("inspection_restart");
       resetFrameJudgementGate();
       greetingGateRef.current = createInspectionGreetingGate();
+      hasRequestedInspectionCompletionRef.current = false;
       initialStepInstructionSentRef.current = false;
       setIsGreetingActive(true);
 
@@ -766,14 +882,18 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       clearGreetingFinishTimer();
       clearGreetingWordTimer();
       clearCameraFrameJudgeTimer();
+      clearCompletionRedirectTimer();
+      resolveCompletionSpeechWait("screen_cleanup");
       resetFrameJudgementGate();
       void voiceDriver.disconnect();
     };
   }, [
     clearCameraFrameJudgeTimer,
+    clearCompletionRedirectTimer,
     clearGreetingFinishTimer,
     clearGreetingWordTimer,
     resetFrameJudgementGate,
+    resolveCompletionSpeechWait,
     sessionId,
     updateGreetingDisplayMessage,
     voiceDriver,
@@ -984,6 +1104,106 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     sessionId,
     visibleScreen,
     voiceDriver,
+  ]);
+
+  useEffect(() => {
+    if (
+      !session ||
+      session.status !== "ready_for_submission" ||
+      isComplete ||
+      hasRequestedInspectionCompletionRef.current
+    ) {
+      return;
+    }
+
+    hasRequestedInspectionCompletionRef.current = true;
+    let isCancelled = false;
+    const completionStepId = activeStepRef.current?.id;
+
+    async function finishReadyInspection() {
+      setIsBusy(true);
+      setErrorMessage(null);
+      logInspectionFlowEvent({
+        event: "inspection_completion_requested",
+        screen: visibleScreen,
+        sessionId,
+        stepId: completionStepId,
+      });
+
+      try {
+        const completed = await completeInspectionSession(sessionId);
+        logInspectionFlowEvent({
+          event: "inspection_completed",
+          payload: {
+            agentMessage: completed.agentMessage,
+            completedStepCount: completed.completedStepCount,
+            status: completed.status,
+          },
+          screen: visibleScreen,
+          sessionId,
+          stepId: completionStepId,
+        });
+        await waitForAgentIdle();
+        if (isCancelled) {
+          return;
+        }
+        const completionSpeechFinished = startCompletionSpeechWait();
+        await voiceDriver.sendControlEvent(
+          [
+            "INSPECTION_COMPLETED.",
+            `Status: ${completed.status}.`,
+            `Completed steps: ${completed.completedStepCount}.`,
+            "Thank the jockey in your own short words.",
+          ].join(" "),
+        ).catch((error) => {
+          resolveCompletionSpeechWait("completion_send_failed");
+          throw error;
+        });
+        await completionSpeechFinished;
+
+        if (isCancelled) {
+          return;
+        }
+        setIsComplete(true);
+        clearCompletionRedirectTimer();
+        completionRedirectTimerRef.current = setTimeout(() => {
+          completionRedirectTimerRef.current = null;
+          router.replace("/" as never);
+        }, COMPLETION_NAVIGATION_DWELL_MS);
+      } catch (error) {
+        logInspectionFlowEvent({
+          event: "inspection_completion_failed",
+          payload: { error: getInspectionErrorMessage(error) },
+          screen: visibleScreen,
+          sessionId,
+          stepId: completionStepId,
+        });
+        if (!isCancelled) {
+          hasRequestedInspectionCompletionRef.current = false;
+          setErrorMessage(getInspectionErrorMessage(error));
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsBusy(false);
+        }
+      }
+    }
+
+    void finishReadyInspection();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    clearCompletionRedirectTimer,
+    isComplete,
+    resolveCompletionSpeechWait,
+    session,
+    sessionId,
+    startCompletionSpeechWait,
+    visibleScreen,
+    voiceDriver,
+    waitForAgentIdle,
   ]);
 
   async function handleAnalyzeFrame() {
@@ -1352,18 +1572,20 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     }
   }
 
-  async function handleEngineSubmit() {
+  async function handleEngineSubmit(answers: EngineQnaAnswers) {
     if (!activeStep || isBusy) {
       return;
     }
 
+    const transcript = getEngineAnswerTranscript(answers);
     setIsBusy(true);
     setErrorMessage(null);
     logInspectionFlowEvent({
       event: "engine_answer_submitted",
       payload: {
+        answers,
         phase: "final",
-        transcript: ENGINE_TRANSCRIPT,
+        transcript,
       },
       screen: "engine_guided",
       sessionId,
@@ -1372,10 +1594,10 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
     try {
       const engine = await runEngineCheck({
+        answers,
         phase: "final",
         sessionId,
         stepId: activeStep.id,
-        transcript: ENGINE_TRANSCRIPT,
       });
       if (engine.session) {
         setSession(engine.session);
@@ -1389,42 +1611,15 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           phase: engine.phase,
           questions: engine.questions,
           structuredFields: engine.structuredFields,
-          transcript: ENGINE_TRANSCRIPT,
+          transcript,
         },
         screen: "engine_guided",
         sessionId,
         stepId: activeStep.id,
       });
-
-      const completed = await completeInspectionSession(sessionId);
-      logInspectionFlowEvent({
-        event: "inspection_completed",
-        payload: {
-          agentMessage: completed.agentMessage,
-          completedStepCount: completed.completedStepCount,
-          status: completed.status,
-        },
-        screen: "engine_guided",
-        sessionId,
-        stepId: activeStep.id,
-      });
-      await voiceDriver.sendControlEvent(
-        [
-          "INSPECTION_COMPLETED.",
-          `Status: ${completed.status}.`,
-          `Completed steps: ${completed.completedStepCount}.`,
-          `Engine transcript: ${ENGINE_TRANSCRIPT}`,
-          `Engine structured fields: ${JSON.stringify(engine.structuredFields)}.`,
-          "Thank the jockey in your own short words.",
-        ].join(" "),
-      );
-      setIsComplete(true);
-      setTimeout(() => {
-        router.replace("/" as never);
-      }, 1400);
     } catch (error) {
       logInspectionFlowEvent({
-        event: "engine_or_completion_failed",
+        event: "engine_answer_failed",
         payload: { error: getInspectionErrorMessage(error) },
         screen: "engine_guided",
         sessionId,

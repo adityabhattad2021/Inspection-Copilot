@@ -342,6 +342,7 @@ export async function runEngineCheck(request: {
   sessionId: string;
   stepId: string;
   phase: string;
+  answers?: Record<string, string>;
   transcript?: string;
 }): Promise<EngineCheckResponse> {
   return requestJson<EngineCheckResponse>("/ai/engine-check", {

@@ -332,6 +332,27 @@ def test_voice_tools_expose_frame_observation_and_completion_functions():
         "record_engine_observation",
         "complete_inspection",
     ]
+    engine_tool = next(
+        tool for tool in tools.standard_tools if tool.name == "record_engine_observation"
+    )
+    assert engine_tool.required == [
+        "knocking",
+        "rattling",
+        "idleVibration",
+        "exhaustSound",
+    ]
+    assert engine_tool.properties["knocking"]["enum"] == ["yes", "no"]
+    assert engine_tool.properties["rattling"]["enum"] == ["yes", "no"]
+    assert engine_tool.properties["idleVibration"]["enum"] == [
+        "none",
+        "mild",
+        "heavy",
+    ]
+    assert engine_tool.properties["exhaustSound"]["enum"] == [
+        "normal",
+        "noisy",
+        "smoke",
+    ]
 
 
 def test_voice_transport_params_keep_camera_feed_off_the_voice_model():
@@ -610,6 +631,61 @@ def test_voice_observation_handler_notifies_mobile_and_requests_response():
     assert sent_tool_results == [("call_door_observation", tool_results[0], True)]
 
 
+def test_voice_engine_handler_records_ai_interpreted_answers():
+    session_id = _create_started_session()
+    _capture_step(session_id, "front-main", "front-main-good")
+    _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
+    record_voice_observation(
+        session_id=session_id,
+        step_id="lhs-front-door",
+        transcript="Minor scratch near the handle, no dent.",
+    )
+    _capture_step(session_id, "rear-main", "rear-main-good")
+    _capture_step(session_id, "dashboard-odometer", "dashboard-good")
+    sent_voice_results = []
+    sent_tool_results = []
+    tool_results = []
+
+    async def send_voice_result(result):
+        sent_voice_results.append(result)
+
+    async def send_tool_result(tool_call_id, result, create_response):
+        sent_tool_results.append((tool_call_id, result, create_response))
+
+    class Params:
+        tool_call_id = "call_engine_observation"
+        arguments = {
+            "stepId": "engine-sound",
+            "transcript": "I do not hear knocking or rattle. Slight shake, exhaust ok.",
+            "knocking": "no",
+            "rattling": "no",
+            "idleVibration": "mild",
+            "exhaustSound": "normal",
+        }
+
+        async def result_callback(self, result):
+            tool_results.append(result)
+
+    handlers = build_voice_function_handlers(
+        session_id,
+        on_tool_result=send_tool_result,
+        on_voice_result=send_voice_result,
+    )
+
+    asyncio.run(handlers["record_engine_observation"](Params()))
+
+    assert tool_results[0]["type"] == "engine"
+    assert tool_results[0]["structuredFields"] == {
+        "abnormalVibration": "mild at idle",
+        "exhaustSound": "normal",
+        "knocking": False,
+        "rattling": False,
+    }
+    assert tool_results[0]["session"]["status"] == "ready_for_submission"
+    assert sent_voice_results == tool_results
+    assert sent_tool_results == [("call_engine_observation", tool_results[0], True)]
+
+
 def test_realtime_bot_resolves_session_id_from_pipecat_runner_body():
     class RunnerArgs:
         body = {"sessionId": "insp_123", "languageCode": "hi-IN"}
@@ -692,9 +768,15 @@ def test_voice_record_engine_observation_marks_session_ready_for_submission():
     _capture_step(session_id, "dashboard-odometer", "dashboard-good")
 
     result = record_voice_observation(
+        answers={
+            "knocking": "no",
+            "rattling": "no",
+            "idleVibration": "mild",
+            "exhaustSound": "normal",
+        },
         session_id=session_id,
         step_id="engine-sound",
-        transcript="No knocking. Mild vibration at idle. Exhaust sounds normal.",
+        transcript="Jockey reported no unusual sound, mild shake, normal exhaust.",
     )
 
     assert result["type"] == "engine"

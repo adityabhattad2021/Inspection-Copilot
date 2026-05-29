@@ -23,9 +23,15 @@ from app.database import (
 )
 from app.routes.sessions import InspectionStep, SessionResponse
 from app.services.ai_stub import structure_observation
-from app.services.engine_check import engine_issue_summary, structure_engine_answers
+from app.services.engine_check import (
+    engine_answers_to_transcript,
+    engine_issue_summary,
+    structure_engine_answer_options,
+    structure_engine_answers,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
+ENGINE_ANSWER_KEYS = ("knocking", "rattling", "idleVibration", "exhaustSound")
 
 
 @dataclass(frozen=True)
@@ -275,8 +281,14 @@ def _record_engine_observation(
     session_id: str,
     step: InspectionStep,
     transcript: str,
+    answers: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    fields = structure_engine_answers(transcript)
+    if answers:
+        fields = structure_engine_answer_options(answers)
+        stored_transcript = transcript.strip() or engine_answers_to_transcript(answers)
+    else:
+        fields = structure_engine_answers(transcript)
+        stored_transcript = transcript
     issue, severity = engine_issue_summary(fields)
     now = _utc_now()
     save_structured_observation(
@@ -284,7 +296,7 @@ def _record_engine_observation(
         session_id=session_id,
         step_id=step.id,
         field_id=step.field_id,
-        transcript=transcript,
+        transcript=stored_transcript,
         issue=issue,
         severity=severity,
         confidence=0.88,
@@ -309,11 +321,13 @@ def record_voice_observation(
     session_id: str,
     transcript: str,
     step_id: str | None = None,
+    answers: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     session = _load_session(session_id)
     step = _session_step(session, step_id)
     if step.kind == "engine-guided":
         return _record_engine_observation(
+            answers=answers,
             session_id=session_id,
             step=step,
             transcript=transcript,
@@ -364,6 +378,11 @@ def build_voice_tools() -> ToolsSchema:
         "description": "Optional current inspection step id.",
         "type": "string",
     }
+    yes_no_property = {
+        "description": "AI-interpreted yes/no answer from the jockey.",
+        "enum": ["yes", "no"],
+        "type": "string",
+    }
     return ToolsSchema(
         standard_tools=[
             FunctionSchema(
@@ -397,12 +416,36 @@ def build_voice_tools() -> ToolsSchema:
             ),
             FunctionSchema(
                 name="record_engine_observation",
-                description="Save a spoken guided engine-sound answer to the inspection.",
+                description=(
+                    "Save AI-interpreted spoken engine Q&A answers to the "
+                    "inspection after the jockey answers aloud."
+                ),
                 properties={
-                    "transcript": transcript_property,
                     "stepId": step_property,
+                    "transcript": transcript_property,
+                    "knocking": yes_no_property,
+                    "rattling": yes_no_property,
+                    "idleVibration": {
+                        "description": (
+                            "AI-interpreted idle vibration level from the jockey."
+                        ),
+                        "enum": ["none", "mild", "heavy"],
+                        "type": "string",
+                    },
+                    "exhaustSound": {
+                        "description": (
+                            "AI-interpreted exhaust sound category from the jockey."
+                        ),
+                        "enum": ["normal", "noisy", "smoke"],
+                        "type": "string",
+                    },
                 },
-                required=["transcript"],
+                required=[
+                    "knocking",
+                    "rattling",
+                    "idleVibration",
+                    "exhaustSound",
+                ],
             ),
             FunctionSchema(
                 name="complete_inspection",
@@ -492,6 +535,31 @@ def build_voice_function_handlers(
         if on_voice_result:
             await on_voice_result(result)
 
+    async def record_engine_observation(params: FunctionCallParams):
+        arguments = params.arguments
+        answers = {
+            key: str(arguments.get(key) or "").strip()
+            for key in ENGINE_ANSWER_KEYS
+        }
+        missing_answers = [key for key, value in answers.items() if not value]
+        if missing_answers:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Missing engine answers: {', '.join(missing_answers)}",
+            )
+
+        transcript = str(arguments.get("transcript") or "").strip()
+        step_id = arguments.get("stepId")
+        result = record_voice_observation(
+            answers=answers,
+            session_id=session_id,
+            step_id=str(step_id) if step_id else None,
+            transcript=transcript,
+        )
+        await publish_tool_result(params, result)
+        if on_voice_result:
+            await on_voice_result(result)
+
     async def complete_inspection(params: FunctionCallParams):
         result = complete_voice_inspection(session_id)
         await publish_tool_result(params, result)
@@ -502,6 +570,6 @@ def build_voice_function_handlers(
         "accept_photo": accept_photo,
         "record_frame_intervention": record_frame,
         "record_door_observation": record_observation,
-        "record_engine_observation": record_observation,
+        "record_engine_observation": record_engine_observation,
         "complete_inspection": complete_inspection,
     }

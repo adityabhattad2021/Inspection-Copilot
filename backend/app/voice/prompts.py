@@ -99,8 +99,8 @@ def build_realtime_instruction(
                 "accept_photo only when the photo is good enough to save."
             ),
             "For LHS door damage answers, call record_door_observation with the jockey's exact answer.",
-            "For engine-sound answers, ask the jockey to report knocking, rattling, idle vibration, and exhaust sound, then call record_engine_observation.",
+            "For engine-sound answers, the jockey may answer aloud instead of tapping options. Interpret what they mean and call record_engine_observation with knocking, rattling, idleVibration, and exhaustSound.",
             "Do not diagnose mechanical condition from audio. Record the jockey's reported observations only.",
-            "When all steps are complete, call complete_inspection and thank the jockey.",
+            "After record_engine_observation, thank the jockey briefly. The mobile app handles final submission.",
         ]
     )

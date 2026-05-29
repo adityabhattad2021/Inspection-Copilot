@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 from pathlib import Path
@@ -299,3 +300,71 @@ def test_engine_check_completes_final_step_and_session_complete_thanks_agent():
     assert complete_body["status"] == "completed"
     assert complete_body["completedStepCount"] == 5
     assert "Thank you" in complete_body["agentMessage"]
+
+
+def test_engine_check_accepts_structured_qna_answers_and_records_observation():
+    session_id = _create_session()
+    client.post(f"/sessions/{session_id}/start", json={})
+    _capture_step(session_id, "front-main", "front-main-good")
+    _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
+    client.post(
+        "/ai/structure-observation",
+        json={
+            "sessionId": session_id,
+            "stepId": "lhs-front-door",
+            "transcript": "Minor scratch near the handle, no dent.",
+        },
+    )
+    _capture_step(session_id, "rear-main", "rear-main-good")
+    _capture_step(session_id, "dashboard-odometer", "dashboard-good")
+
+    engine_response = client.post(
+        "/ai/engine-check",
+        json={
+            "sessionId": session_id,
+            "stepId": "engine-sound",
+            "phase": "final",
+            "answers": {
+                "knocking": "no",
+                "rattling": "no",
+                "idleVibration": "mild",
+                "exhaustSound": "normal",
+            },
+        },
+    )
+
+    assert engine_response.status_code == 200
+    engine_body = engine_response.json()
+    assert engine_body["isComplete"] is True
+    assert engine_body["structuredFields"] == {
+        "abnormalVibration": "mild at idle",
+        "exhaustSound": "normal",
+        "knocking": False,
+        "rattling": False,
+    }
+
+    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            """
+            SELECT step_id, issue, severity, transcript, payload_json
+            FROM structured_observations
+            WHERE session_id = ?
+                AND step_id = ?
+            """,
+            (session_id, "engine-sound"),
+        ).fetchone()
+
+    assert row["step_id"] == "engine-sound"
+    assert row["issue"] == "mild vibration"
+    assert row["severity"] == "minor"
+    assert row["transcript"] == (
+        "Knocking: no. Rattling: no. Idle vibration: mild. "
+        "Exhaust sound: normal."
+    )
+    assert json.loads(row["payload_json"]) == {
+        "abnormalVibration": "mild at idle",
+        "exhaustSound": "normal",
+        "knocking": False,
+        "rattling": False,
+    }
