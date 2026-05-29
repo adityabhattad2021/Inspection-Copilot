@@ -1,704 +1,599 @@
 # ARCHITECTURE: Cars24 Jockey Copilot
 
+This document describes the current implementation state of the hackathon app.
+
+The backend demo deployment is an EC2-hosted FastAPI Docker service backed by DynamoDB and an S3 evidence bucket. The code still contains local SQLite/filesystem adapters for local development and tests, but the current backend architecture should be read as EC2 + DynamoDB + S3.
+
 ## Decision Map
 
-| Area | Locked Choice | Why It Exists |
+| Area | Current Choice | Why It Exists |
 |---|---|---|
-| App | Expo React Native development build | Native Android demo, fast iteration, production-like permissions |
-| Camera | React Native VisionCamera | Live preview, programmatic `takePhoto()`, future frame processors |
-| Backend | FastAPI Python on AWS Lambda using Mangum | Python AI workflow, simple AWS deployment |
-| Media | S3 presigned uploads | Device uploads evidence and backend stores generated report artifacts |
-| State | Local SQLite file for hack, swappable later | Durable-enough local inspection state without SaaS dependency |
-| AI | OpenAI behind FastAPI | Device never holds AI keys; backend controls prompts and schemas |
-| Vehicle data | Mock registration lookup for hack | Same interface can later connect to Cars24/RC provider |
-| Video strategy | Sampled frames, not raw video stream | Feasible, lower latency/cost, supported by current OpenAI vision flow |
+| Mobile app | Expo React Native Android development build | Native Android demo with microphone, camera, WebRTC, and a custom frame-capture module |
+| Navigation | Expo Router | Small route surface: onboarding, lookup, vehicle confirmation, inspection |
+| Camera | Pipecat Small WebRTC local camera track rendered with `RTCView` | The realtime voice session owns camera/mic transport, and the app captures the visible RTC view when needed |
+| Frame capture | Android native `RealtimeFrameCaptureModule` | Captures the rendered realtime camera frame as a JPEG for photo review and evidence |
+| Backend hosting | FastAPI in Docker on EC2 | Simple deployed backend at `http://65.0.101.246`, no Lambda/Mangum/API Gateway in the current deployment |
+| Persistence | DynamoDB backend adapter | EC2 service remains stateless; session, plan, evidence metadata, observations, interventions, profiles, and reports live in DynamoDB |
+| Media storage | S3 evidence bucket | Stores photo evidence when `JOCKEY_COPILOT_S3_BUCKET` is configured; presigned uploads are also available |
+| Voice runtime | Pipecat Small WebRTC backend bot | Keeps realtime LLM keys on the backend and streams voice/camera through the backend-controlled runtime |
+| Voice LLM | Gemini Live by default, OpenAI Realtime rollback | Backend can switch providers through `VOICE_LLM_PROVIDER` without changing mobile code |
+| Vehicle data | Seeded demo vehicles | Stable hackathon path with the same interface a real RC/Cars24 provider could replace |
+| Report output | FastAPI report JSON/HTML endpoints backed by DynamoDB | Completion creates report metadata and serves pricing/audit report views from the backend |
+
+## Deployment Architecture
+
+```mermaid
+flowchart TB
+  Dev["Developer laptop"] --> DeployScript["deploy/aws/deploy-backend.sh"]
+  DeployScript -->|rsync backend + deploy files| EC2Host["EC2 instance<br/>65.0.101.246"]
+
+  subgraph EC2["EC2 backend host"]
+    Compose["docker-compose"]
+    Container["backend container<br/>FastAPI + uvicorn<br/>port 8000"]
+    Env["deploy/.env.aws<br/>runtime secrets and AWS config"]
+  end
+
+  subgraph AWS["AWS managed storage"]
+    DDB["DynamoDB table<br/>JOCKEY_COPILOT_DDB_TABLE"]
+    S3["S3 evidence bucket<br/>JOCKEY_COPILOT_S3_BUCKET"]
+  end
+
+  subgraph AI["Realtime AI providers"]
+    Gemini["Gemini Live<br/>default"]
+    OpenAI["OpenAI Realtime<br/>rollback option"]
+  end
+
+  Android["Android dev client / APK"] -->|HTTP REST + Small WebRTC signaling| Container
+  EC2Host --> Compose
+  Compose --> Container
+  Env --> Container
+  Container -->|boto3 database adapter| DDB
+  Container -->|boto3 object upload / presign| S3
+  Container -->|Pipecat realtime session| Gemini
+  Container -->|optional provider switch| OpenAI
+  Container -->|GET /health| Health["Health check"]
+```
 
 ## System Architecture
 
 ```mermaid
 flowchart LR
-  subgraph User["Inspection Site"]
+  subgraph Field["Inspection site"]
     J["Car Jockey"]
-    C["Used Car"]
+    Car["Used car"]
   end
 
-  subgraph App["React Native Android App"]
-    Onboarding["Jockey Onboarding"]
-    Lookup["Vehicle Lookup"]
-    Plan["Dynamic Inspection Plan"]
-    Camera["VisionCamera Live Guidance"]
-    Engine["Guided Engine Check"]
-    Submit["Submit Inspection"]
-    Store["Zustand Session Store"]
+  subgraph Mobile["Expo React Native Android app"]
+    Onboarding["Onboarding<br/>name + language"]
+    Lookup["Vehicle lookup"]
+    Found["Vehicle-found screen<br/>3D model + plan preview"]
+    Inspection["Inspection screen<br/>voice, camera, progress, engine Q&A"]
+    ApiClient["Typed API client<br/>src/api/client.ts"]
+    VoiceBoundary["Pipecat voice boundary<br/>Small WebRTC client"]
+    FrameCapture["Android frame capture module"]
+    Cache["AsyncStorage<br/>cached profile"]
+    DebugClient["Dev flow logger"]
   end
 
-  subgraph AWS["AWS Backend"]
-    API["API Gateway"]
-    Lambda["FastAPI Lambda<br/>Mangum"]
-    DDB["SQLite<br/>local inspection sessions"]
-    S3["S3<br/>photos + optional audio + report HTML/JSON"]
-    Logs["CloudWatch Logs"]
+  subgraph Backend["FastAPI on EC2"]
+    Profiles["/profiles"]
+    Vehicles["/vehicles"]
+    Sessions["/sessions"]
+    AIHelpers["/ai helpers"]
+    Evidence["/evidence/photo"]
+    Uploads["/uploads/presign"]
+    VoiceConfig["/voice/config"]
+    WebRTC["/start + /api/offer"]
+    Debug["/debug/inspection-flow-log"]
+    Bot["Pipecat realtime bot"]
   end
 
-  subgraph AI["AI Layer"]
-    OpenAI["OpenAI<br/>vision + reasoning + structured JSON"]
+  subgraph Storage["Backend storage"]
+    DDB["DynamoDB"]
+    S3["S3 evidence bucket"]
+    Reports["Report JSON/HTML<br/>served by FastAPI"]
+    Logs["Debug NDJSON logs<br/>dev only"]
   end
 
-  subgraph Reports["Report Channels"]
-    Dashboard["Ops Dashboard"]
-    Email["Email Link<br/>optional"]
+  subgraph LLM["Voice and reasoning layer"]
+    Gemini["Gemini Live"]
+    OpenAI["OpenAI Realtime"]
   end
 
   J --> Onboarding
-  Onboarding --> Lookup
-  J --> Camera
-  J --> Engine
-  Camera --> C
-  Onboarding --> API
-  Lookup --> API
-  Camera --> API
-  Engine --> API
-  Submit --> API
-  API --> Lambda
-  Lambda <--> DDB
-  Lambda --> S3
-  Lambda <--> OpenAI
-  Lambda --> Logs
-  S3 --> Dashboard
-  S3 --> Email
-  DDB --> Dashboard
-  Store <--> Lookup
-  Store <--> Plan
-  Store <--> Camera
-  Store <--> Engine
-  Store <--> Submit
+  J --> Lookup
+  J --> Inspection
+  Car --> Inspection
+  Onboarding <--> Cache
+  Lookup --> Found
+  Found --> Inspection
+  Onboarding --> ApiClient
+  Lookup --> ApiClient
+  Found --> ApiClient
+  Inspection --> ApiClient
+  Inspection <--> VoiceBoundary
+  Inspection --> FrameCapture
+  DebugClient --> Debug
+
+  ApiClient --> Profiles
+  ApiClient --> Vehicles
+  ApiClient --> Sessions
+  ApiClient --> AIHelpers
+  ApiClient --> Evidence
+  ApiClient --> VoiceConfig
+  VoiceBoundary --> WebRTC
+
+  WebRTC --> Bot
+  Bot <--> Gemini
+  Bot <--> OpenAI
+  Bot --> DDB
+  Bot --> S3
+
+  Profiles --> DDB
+  Vehicles --> DDB
+  Sessions --> DDB
+  AIHelpers --> DDB
+  Evidence --> DDB
+  Evidence --> S3
+  Uploads --> S3
+  Sessions --> Reports
+  Reports --> DDB
+  Debug --> Logs
 ```
 
 ## App Surface Map
 
 ```mermaid
 flowchart TD
-  Start["app/index.tsx<br/>Profile Gate"] --> ProfileCache{"Cached profile?"}
-  ProfileCache -->|No| Onboarding["app/onboarding.tsx<br/>Jockey Setup"]
-  ProfileCache -->|Yes| GetProfile["GET /profiles/{profileId}"]
-  Onboarding --> CreateProfile["POST /profiles"]
-  CreateProfile --> Start
-  GetProfile --> Lookup["Registration Entry"]
+  Launch["app/index.tsx"] --> CacheCheck{"Cached profile?"}
+  CacheCheck -->|No| OnboardingRoute["app/onboarding.tsx"]
+  CacheCheck -->|Yes| ProfileAPI["GET /profiles/{profileId}"]
+  OnboardingRoute --> CreateProfile["POST /profiles"]
+  CreateProfile --> SaveCache["AsyncStorage save"]
+  SaveCache --> Launch
+  ProfileAPI --> Lookup["VehicleLookupScreen"]
+
   Lookup --> LookupAPI["POST /vehicles/lookup"]
-  LookupAPI --> SessionAPI["POST /sessions"]
-  SessionAPI --> Inspect["app/inspection/[sessionId].tsx"]
+  LookupAPI --> VehicleFoundRoute["app/vehicle-found.tsx"]
+  VehicleFoundRoute --> VehicleFound["VehicleFoundScreen<br/>3D model + vehicle identity"]
+  VehicleFound --> CreateSession["POST /sessions"]
+  CreateSession --> InspectionRoute["app/inspection/[sessionId].tsx"]
 
-  Inspect --> Stepper["StepProgress"]
-  Inspect --> Copilot["CopilotPanel"]
-  Inspect --> Capture["LiveGuidanceCamera"]
-  Inspect --> Voice["Voice Observation"]
-  Inspect --> Engine["EngineGuidedCheck"]
-
-  Capture --> Review["CaptureReview"]
-  Review --> NextStep{"More Steps?"}
-  Voice --> NextStep
-  Engine --> NextStep
-  NextStep -->|Yes| Inspect
-  NextStep -->|No| CompleteAPI["POST /sessions/{id}/complete"]
-  CompleteAPI --> Submitted["Submitted screen<br/>report created outside app"]
-  CompleteAPI --> Dashboard["Ops dashboard / email link"]
+  InspectionRoute --> InspectionScreen["InspectionScreen"]
+  InspectionScreen --> VoiceRuntime["GET /voice/config<br/>connect Pipecat"]
+  InspectionScreen --> StartSession["POST /sessions/{id}/start"]
+  InspectionScreen --> RealtimeCamera["RealtimeCameraScreen<br/>RTCView"]
+  InspectionScreen --> EngineCheck["EngineGuidedCheck"]
+  InspectionScreen --> Complete["POST /sessions/{id}/complete"]
+  RealtimeCamera --> NativeCapture["captureRealtimeFrame(viewTag)"]
+  Complete --> BackToLookup["Return to lookup"]
 ```
 
-## Client Module Map
+## Mobile Module Map
 
 ```mermaid
 flowchart LR
-  subgraph AppRoutes["app/"]
-    Index["index.tsx"]
+  subgraph Routes["mobile/app"]
+    OnboardingRoute["onboarding.tsx"]
+    IndexRoute["index.tsx"]
+    VehicleFoundRoute["vehicle-found.tsx"]
     InspectionRoute["inspection/[sessionId].tsx"]
   end
 
-  subgraph Features["src/features/"]
-    LookupScreen["lookup/VehicleLookupScreen"]
-    InspectionScreen["inspection/InspectionScreen"]
-    LiveCamera["inspection/LiveGuidanceCamera"]
-    CopilotPanel["inspection/CopilotPanel"]
-    CaptureReview["inspection/CaptureReview"]
-    EngineCheck["engine/EngineGuidedCheck"]
-    SubmittedScreen["inspection/SubmittedScreen"]
+  subgraph Features["mobile/src/features"]
+    Onboarding["onboarding/*<br/>profile setup + storage"]
+    Lookup["lookup/*<br/>registration lookup + 3D model"]
+    Inspection["inspection/inspection-screen.tsx"]
+    VoiceBoundary["inspection/pipecat-voice-boundary.ts"]
+    CameraScreen["inspection/realtime-camera-screen.tsx"]
+    FrameCapture["inspection/realtime-frame-capture.ts"]
+    Engine["inspection/engine-guided-check.tsx"]
+    DebugLog["inspection/inspection-debug-log.ts"]
   end
 
-  subgraph Core["src/lib + src/store"]
-    ApiClient["api/client.ts"]
-    Schemas["lib/schemas.ts"]
-    PlanBuilder["lib/inspectionPlan.ts"]
-    LocalImageQA["lib/localImageQa.ts"]
-    LocalAudioQA["lib/localAudioQa.ts"]
-    Store["store/inspectionStore.ts"]
+  subgraph Core["mobile/src"]
+    Api["api/client.ts"]
+    Media["data/live-inspection-media.ts"]
+    UI["components/ui/*"]
   end
 
-  Index --> LookupScreen
-  InspectionRoute --> InspectionScreen
-  LookupScreen --> ApiClient
-  InspectionScreen --> LiveCamera
-  InspectionScreen --> CopilotPanel
-  InspectionScreen --> EngineCheck
-  InspectionScreen --> SubmittedScreen
-  LiveCamera --> LocalImageQA
-  EngineCheck --> LocalAudioQA
-  LookupScreen --> Store
-  InspectionScreen --> Store
-  ApiClient --> Schemas
-  PlanBuilder --> Schemas
+  OnboardingRoute --> Onboarding
+  IndexRoute --> Onboarding
+  IndexRoute --> Lookup
+  VehicleFoundRoute --> Lookup
+  InspectionRoute --> Inspection
+  Inspection --> VoiceBoundary
+  Inspection --> CameraScreen
+  Inspection --> FrameCapture
+  Inspection --> Engine
+  Inspection --> DebugLog
+  Inspection --> Media
+  Lookup --> Api
+  Onboarding --> Api
+  Inspection --> Api
+  Lookup --> UI
+  Inspection --> UI
 ```
 
 ## Backend Module Map
 
 ```mermaid
 flowchart LR
+  Main["app/main.py<br/>FastAPI route wiring"]
+
   subgraph Routes["app/routes"]
     Profiles["profiles.py"]
     Vehicles["vehicles.py"]
     Sessions["sessions.py"]
-    Uploads["uploads.py"]
     AI["ai.py"]
+    Evidence["evidence.py"]
+    Uploads["uploads.py"]
+    Debug["debug.py"]
+    Voice["voice.py"]
   end
 
-  subgraph Services["app/services"]
-    VehicleLookup["vehicle_lookup.py"]
-    PlanGen["plan_generator.py"]
-    S3Svc["s3.py"]
-    OpenAIClient["openai_client.py"]
-    LiveFrameQA["live_frame_qa.py"]
-    VisionQA["vision_qa.py"]
-    SpeechQA["speech_qa.py"]
-    EngineCheck["engine_check.py"]
-    AudioEvidenceQA["audio_evidence_qa.py<br/>optional"]
-    ReportGen["report_generator.py"]
-    EmailSvc["email.py<br/>optional"]
+  subgraph VoiceRuntime["app/voice"]
+    WebRTC["webrtc.py"]
+    Bot["realtime_bot.py"]
+    Config["config.py"]
+    Prompts["prompts.py"]
+    Tools["tools.py"]
   end
 
-  subgraph Models["app/models"]
-    VehicleModel["vehicle.py"]
-    InspectionModel["inspection.py"]
-    AIModel["ai.py"]
-    ReportModel["report.py"]
+  subgraph Persistence["app/database"]
+    Adapter["__init__.py<br/>deployed backend selects DynamoDB"]
+    Dynamo["dynamodb_backend.py"]
+    Seed["seed_data.py + seed_queries.py"]
   end
 
-  ProfileStore["database/profile_queries.py"]
+  subgraph Services["app/services + app/storage"]
+    AIStub["ai_stub.py"]
+    Engine["engine_check.py"]
+    Report["report_generator.py"]
+    S3Store["storage/s3_store.py"]
+  end
 
-  Profiles --> ProfileStore
-  Vehicles --> VehicleLookup
-  Sessions --> PlanGen
-  Uploads --> S3Svc
-  AI --> OpenAIClient
-  AI --> LiveFrameQA
-  AI --> VisionQA
-  AI --> SpeechQA
-  AI --> EngineCheck
-  AI --> AudioEvidenceQA
-  Sessions --> ReportGen
-  Sessions --> EmailSvc
+  Main --> Profiles
+  Main --> Vehicles
+  Main --> Sessions
+  Main --> AI
+  Main --> Evidence
+  Main --> Uploads
+  Main --> Debug
+  Main --> Voice
+  Main --> WebRTC
 
-  VehicleLookup --> VehicleModel
-  PlanGen --> InspectionModel
-  LiveFrameQA --> AIModel
-  VisionQA --> AIModel
-  SpeechQA --> AIModel
-  EngineCheck --> AIModel
-  AudioEvidenceQA --> AIModel
-  ReportGen --> ReportModel
+  Profiles --> Adapter
+  Vehicles --> Adapter
+  Sessions --> Adapter
+  AI --> Adapter
+  Evidence --> Adapter
+  Uploads --> S3Store
+  Evidence --> S3Store
+  Sessions --> Report
+  AI --> AIStub
+  AI --> Engine
+
+  Adapter --> Dynamo
+  Seed --> Dynamo
+
+  Voice --> Config
+  WebRTC --> Bot
+  Bot --> Config
+  Bot --> Prompts
+  Bot --> Tools
+  Tools --> Adapter
+  Tools --> S3Store
 ```
 
-## End-To-End Inspection Sequence
+## End-To-End Runtime Sequence
 
 ```mermaid
 sequenceDiagram
   autonumber
   actor J as Car Jockey
-  participant App as RN App
-  participant API as FastAPI Lambda
-  participant DDB as SQLite
-  participant S3 as S3
-  participant OAI as OpenAI
+  participant App as Expo Android app
+  participant Cache as AsyncStorage
+  participant API as FastAPI on EC2
+  participant Voice as Pipecat bot
+  participant LLM as Gemini Live or OpenAI Realtime
+  participant DDB as DynamoDB
+  participant S3 as S3 bucket
+
+  J->>App: Open app
+  App->>Cache: Read cached profile
+  alt No cached profile
+    App-->>J: Ask name and instruction language
+    App->>API: POST /profiles
+    API->>DDB: Save PROFILE item
+    API-->>App: Profile payload
+    App->>Cache: Save profile locally
+  else Cached profile found
+    App->>API: GET /profiles/{profileId}
+    API->>DDB: Load PROFILE item
+    API-->>App: Fresh profile
+  end
 
   J->>App: Enter registration number
+  App->>API: POST /vehicles/lookup
+  API->>DDB: Load VEHICLE item
+  API-->>App: Demo vehicle profile
+  App-->>J: Show vehicle-found screen and 3D model
+
+  J->>App: Start inspection
   App->>API: POST /sessions
-  API->>DDB: Create inspection session
-  API-->>App: Vehicle profile + inspection plan
-  App-->>J: Show first inspection step
+  API->>DDB: Select PLAN_TEMPLATE and write SESSION partition
+  API-->>App: sessionId, vehicle, four-step plan
 
-  loop For each photo step
-    App-->>J: Open VisionCamera live preview
-    J->>App: Point camera at car
-    loop Every 1500ms until ready
-      App->>API: POST /ai/analyze-live-frame
-      API->>OAI: Frame + checklist step + expected parts
-      OAI-->>API: Directional JSON guidance
-      API-->>App: Move / hold / capture status
-      App-->>J: Speak/show short guidance
+  App->>API: GET /voice/config
+  API-->>App: provider, model, voice, startUrl, ready
+  App->>API: POST /sessions/{sessionId}/start
+  API->>DDB: Mark first step active
+  API-->>App: activeStep and greeting metadata
+
+  App->>Voice: Small WebRTC signaling through /start and /api/offer
+  Voice->>DDB: Load session and active inspection plan
+  Voice->>LLM: Start Saarthi prompt with voice tools
+  LLM-->>App: Spoken greeting and guidance
+
+  loop Photo steps: front-main, rear-main, dashboard-odometer
+    App->>Voice: STEP_CHANGED hidden control event
+    Voice->>LLM: Step instructions and expected parts
+    LLM-->>App: Short spoken framing instruction
+    J->>App: Tap capture
+    App->>App: Capture RTCView frame through native Android module
+    App->>Voice: CAPTURED_PHOTO_REVIEW with JPEG data chunks
+    Voice->>LLM: Review captured still photo
+    alt Photo is acceptable
+      LLM->>Voice: accept_photo tool call
+      Voice->>S3: Store photo evidence when bucket is configured
+      Voice->>DDB: Save evidence and advance active step
+      Voice-->>App: photo_acceptance server message
+      App-->>J: Continue to next step
+    else Retake required
+      LLM-->>App: One physical retake fix
+      App-->>J: Retake the photo
     end
-    App->>App: Auto-capture via VisionCamera takePhoto()
-    App->>API: POST /uploads/presign
-    API-->>App: Presigned S3 URL + object key
-    App->>S3: Upload high-res photo
-    App->>API: POST /ai/analyze-photo
-    API->>OAI: Final photo QA
-    OAI-->>API: Accept or retake JSON
-    API->>DDB: Save evidence + AI intervention
-    API-->>App: Accepted or retake reason
   end
 
-  J->>App: Speak observation
-  App->>API: POST /ai/structure-observation
-  API->>OAI: Transcript + active field
-  OAI-->>API: Structured Cars24 field
-  API->>DDB: Save observation
-  API-->>App: Field summary
-
-  J->>App: Start guided engine check
-  App->>API: POST /ai/engine-check
-  API->>OAI: Vehicle + engine fields + current phase
-  OAI-->>API: Listen instructions + questions
-  API-->>App: Idle/rev/listen guidance
-  J->>App: Answer engine questions
-  opt Audio evidence enabled
-    App->>API: POST /uploads/presign
-    API-->>App: Presigned S3 URL + object key
-    App->>S3: Upload engine audio evidence
-    App->>API: POST /ai/audio-evidence-qa
-    API->>DDB: Save audio evidence QA
-  end
-  App->>API: POST /ai/structure-observation
-  API->>DDB: Save engine fields
-  API-->>App: Engine check accepted
+  App-->>J: Guided engine phases and Q&A
+  J->>App: Submit engine answers
+  App->>API: POST /ai/engine-check phase=final
+  API->>DDB: Save structured engine observation
+  API->>DDB: Set session ready_for_submission
+  API-->>App: Updated session
 
   App->>API: POST /sessions/{sessionId}/complete
-  API->>OAI: Generate report summary
-  API->>DDB: Save report
-  API->>S3: Write report.html + report.json
-  opt Email configured
-    API->>API: Queue/send email with report link
-  end
-  API-->>App: Submitted + reportUrl
+  API->>DDB: Load session, evidence, observations, interventions
+  API->>API: Build report payload and render report HTML on demand
+  API->>DDB: Save REPORT item
+  API-->>App: completed status and report links
+  App-->>J: Thank-you message, then return to lookup
 ```
 
-## Live Guidance Sequence
+## Realtime Photo Review Sequence
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant Cam as VisionCamera
-  participant LG as LiveGuidanceCamera
-  participant API as FastAPI
-  participant AI as OpenAI
-  participant UI as Copilot UI
+  participant App as InspectionScreen
+  participant RTC as RTCView camera preview
+  participant Native as Android frame capture
+  participant VoiceClient as Pipecat client
+  participant Bot as FastAPI Pipecat bot
+  participant LLM as Gemini/OpenAI realtime model
+  participant DDB as DynamoDB
+  participant S3 as S3 bucket
 
-  Cam-->>LG: Live preview active
-  LG->>LG: Wait sampleIntervalMs = 1500
-  LG->>LG: Capture low-res sample frame
-  LG->>API: /ai/analyze-live-frame
-  API->>AI: Frame + expected parts + previous guidance
-  AI-->>API: status, guidance, confidence, missingParts
-  API-->>LG: Strict JSON response
-
-  alt status = adjust
-    LG->>UI: "Move a little left"
-    LG->>LG: Reset hold timer
-  else status = hold and confidence >= 0.88
-    LG->>UI: "Good. Hold still."
-    LG->>LG: Start hold timer
-  else status = capture or hold timer >= 1200ms
-    LG->>Cam: takePhoto()
-    LG->>UI: Show captured evidence
-  else AI slow or unavailable
-    LG->>UI: Show local QA + canned guidance
+  App->>VoiceClient: send STEP_CHANGED
+  VoiceClient->>Bot: inspection-control message
+  Bot->>LLM: Inject lifecycle text
+  LLM-->>VoiceClient: Speak next camera action
+  App-->>RTC: Render local camera track
+  App->>Native: captureVideoViewFrame(viewTag)
+  Native-->>App: JPEG uri, bytes, width, height, dataUrl
+  App->>VoiceClient: Send image chunks + CAPTURED_PHOTO_REVIEW
+  VoiceClient->>Bot: inspection-control-photo-chunk messages
+  Bot->>Bot: Reassemble data URL and keep pending photo by stepId
+  Bot->>LLM: Inject captured image for review
+  alt Accepted
+    LLM->>Bot: accept_photo(stepId, visibleParts, guidance)
+    Bot->>S3: Upload/store sessions/{sessionId}/photos/{stepId}.jpg
+    Bot->>DDB: Save EVIDENCE item and complete step
+    Bot-->>VoiceClient: photo_acceptance session update
+    VoiceClient-->>App: Update session and progress rail
+  else Needs retake
+    LLM-->>VoiceClient: Speak one retake instruction
+    VoiceClient-->>App: Keep same active step
   end
 ```
 
-## Live Guidance State Machine
+## Sample Fallback Sequence
 
-```mermaid
-stateDiagram-v2
-  [*] --> PermissionCheck
-  PermissionCheck --> PreviewReady: camera granted
-  PermissionCheck --> DemoMedia: camera denied
-
-  PreviewReady --> Searching: step opens
-  Searching --> Adjusting: missing required parts
-  Searching --> Holding: readyToCapture=true
-  Adjusting --> Adjusting: new movement guidance
-  Adjusting --> Holding: confidence >= minConfidence
-  Holding --> Adjusting: confidence drops
-  Holding --> Capturing: holdMs reached
-  Capturing --> Uploading
-  Uploading --> FinalQA
-  FinalQA --> Accepted: stepPassed=true
-  FinalQA --> Retake: stepPassed=false
-  Retake --> Searching
-  Accepted --> [*]
-
-  DemoMedia --> Uploading: curated media selected
-```
-
-## Guided Engine Check Sequence
+The realtime path above is the primary demo path. The app and backend also keep deterministic sample-frame endpoints for reliable local demos and tests.
 
 ```mermaid
 sequenceDiagram
   autonumber
-  actor J as Car Jockey
-  participant App as RN App
-  participant API as FastAPI
-  participant AI as OpenAI
-  participant S3 as S3
-  participant DDB as SQLite
+  participant App as Mobile app
+  participant API as FastAPI on EC2
+  participant DDB as DynamoDB
 
-  App->>API: POST /ai/engine-check phase=start
-  API->>AI: Vehicle + engine checklist fields
-  AI-->>API: Start/idle listening instruction
-  API-->>App: "Start engine, listen near bonnet for 10s"
-  App-->>J: Show/speak instruction
-  J->>App: Answers knocking/rattle/vibration questions
-  App->>API: POST /ai/engine-check phase=idle answers
-  API->>AI: Jockey answers + field schema
-  AI-->>API: Follow-up rev/exhaust question
-  API-->>App: Next instruction
-  J->>App: Answers follow-up
-  opt Optional audio evidence
-    App->>API: POST /uploads/presign
-    API-->>App: Presigned S3 URL
-    App->>S3: Upload engine.m4a
-    App->>API: POST /ai/audio-evidence-qa
-    API->>DDB: Save audio evidence status
+  App->>API: POST /ai/analyze-live-frame<br/>sessionId, stepId, sampleKey
+  API->>API: Look up canned response in ai_stub.py
+  API->>DDB: Save AI_INTERVENTION item
+  API-->>App: adjust or hold guidance
+  alt readyToCapture true
+    App->>API: POST /evidence/photo<br/>sampleKey, localUri
+    API->>DDB: Save EVIDENCE item and advance step
+    API-->>App: Updated session
+  else adjustment required
+    App-->>App: Show next sample frame
   end
-  API->>DDB: Save structured engine fields
-  API-->>App: Engine check accepted
 ```
 
-## External Report Delivery Sequence
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant App as RN App
-  participant API as FastAPI
-  participant AI as OpenAI
-  participant DDB as SQLite
-  participant S3 as S3
-  participant Dash as Ops Dashboard
-  participant Mail as Email Provider
-
-  App->>API: POST /sessions/{sessionId}/complete
-  API->>DDB: Load vehicle, steps, evidence, interventions
-  API->>AI: Generate report summary and risk notes
-  AI-->>API: Structured report JSON
-  API->>S3: Write report/report.json
-  API->>S3: Write report/report.html
-  API->>DDB: Save reportUrl + dashboard status
-  opt Email enabled
-    API->>Mail: Send report link
-  end
-  API-->>App: Submitted + reportUrl + emailStatus
-  Dash->>DDB: Fetch report metadata
-  Dash->>S3: Open report.html
-```
-
-## Inspection Step Types
-
-```mermaid
-flowchart TD
-  Step["InspectionStep"] --> Photo["photo<br/>Vision guidance + auto-capture"]
-  Step --> Voice["voice<br/>spoken observation to structured field"]
-  Step --> Engine["engine-guided<br/>human listening + optional audio evidence"]
-  Step --> Manual["manual<br/>tap/select fallback"]
-
-  Photo --> LiveFrame["/ai/analyze-live-frame"]
-  Photo --> FinalPhoto["/ai/analyze-photo"]
-  Voice --> Structure["/ai/structure-observation"]
-  Engine --> EngineAPI["/ai/engine-check"]
-  Engine --> AudioEvidence["/ai/audio-evidence-qa<br/>optional"]
-  Manual --> SessionPatch["/sessions/{id} update"]
-```
-
-## Demo Inspection Plan
-
-```mermaid
-flowchart TD
-  Vehicle["KA03MX2147<br/>Hyundai Creta 2020 SX Petrol AT"] --> Plan["SUV Petrol Automatic Plan"]
-  Plan --> F["1. Front frame<br/>photo + live guidance"]
-  F --> R["2. Rear frame<br/>photo + live guidance"]
-  R --> Dash["3. Dashboard / cluster / odometer<br/>photo"]
-  Dash --> Engine["4. Engine sound<br/>guided check + optional audio evidence"]
-  Engine --> Submit["5. Submit inspection"]
-  Submit --> Final["Dashboard/email AI Inspection Quality Report"]
-```
-
-## Data Model
+## DynamoDB Logical Layout
 
 ```mermaid
 erDiagram
-  VEHICLE_PROFILE ||--o{ INSPECTION_SESSION : starts
-  INSPECTION_SESSION ||--o{ INSPECTION_STEP : contains
+  VEHICLE ||--o{ INSPECTION_SESSION : starts
+  PROFILE ||--o{ INSPECTION_SESSION : used_by
+  PLAN_TEMPLATE ||--o{ PLAN_STEP : defines
+  INSPECTION_SESSION ||--o{ SESSION_STEP : snapshots
   INSPECTION_SESSION ||--o{ EVIDENCE_ITEM : stores
-  INSPECTION_SESSION ||--o{ STRUCTURED_OBSERVATION : records
   INSPECTION_SESSION ||--o{ AI_INTERVENTION : logs
+  INSPECTION_SESSION ||--o{ STRUCTURED_OBSERVATION : records
   INSPECTION_SESSION ||--|| REPORT : produces
-  INSPECTION_STEP ||--o{ EVIDENCE_ITEM : requires
-  INSPECTION_STEP ||--o{ AI_INTERVENTION : receives
 
-  VEHICLE_PROFILE {
-    string registrationNumber
+  VEHICLE {
+    string PK "VEHICLE#registration"
+    string SK "META"
     string make
     string model
-    number year
-    string variant
     string fuelType
     string transmission
+  }
+
+  PROFILE {
+    string PK "PROFILE#profileId"
+    string SK "META"
+    string name
+    string languageCode
+  }
+
+  PLAN_TEMPLATE {
+    string PK "PLAN_TEMPLATE#templateId"
+    string SK "META"
     string bodyType
-    string registrationCity
+    string fuelType
+    string transmission
+  }
+
+  PLAN_STEP {
+    string PK "PLAN_TEMPLATE#templateId"
+    string SK "STEP#sortOrder"
+    string fieldName
+    string kind
   }
 
   INSPECTION_SESSION {
-    string sessionId
-    string planName
+    string PK "SESSION#sessionId"
+    string SK "META"
     string status
-    string createdAt
-    string updatedAt
+    object vehicle
+    string planName
   }
 
-  INSPECTION_STEP {
-    string id
-    number fieldId
-    string fieldName
-    string section
-    string kind
+  SESSION_STEP {
+    string PK "SESSION#sessionId"
+    string SK "STEP#sortOrder"
+    string stepId
     string status
   }
 
   EVIDENCE_ITEM {
-    string id
-    string stepId
-    string kind
+    string PK "SESSION#sessionId"
+    string SK "EVIDENCE#createdAt#id"
     string objectKey
-    number qualityScore
-    string accepted
+    float qualityScore
   }
 
   AI_INTERVENTION {
-    string id
-    string stepId
+    string PK "SESSION#sessionId"
+    string SK "AI#createdAt#id"
     string type
     string message
-    number confidence
+  }
+
+  STRUCTURED_OBSERVATION {
+    string PK "SESSION#sessionId"
+    string SK "OBS#createdAt#id"
+    string issue
+    string severity
   }
 
   REPORT {
-    string reportId
-    number completionScore
-    number mediaQualityScore
+    string PK "SESSION#sessionId"
+    string SK "REPORT"
+    float completionScore
+    float mediaQualityScore
     string pricingRisk
-    string summary
   }
 ```
 
-## API Contract Map
+## S3 Object Layout
 
 ```mermaid
-flowchart LR
-  subgraph Client["Mobile App"]
-    A["registrationNumber"]
-    B["sample frame"]
-    C["photo metadata"]
-    D["transcript"]
-    E["engine answers + optional audio metadata"]
-    F["sessionId"]
-  end
-
-  subgraph API["FastAPI Endpoints"]
-    V["POST /vehicles/lookup"]
-    S["POST /sessions"]
-    U["POST /uploads/presign"]
-    LF["POST /ai/analyze-live-frame"]
-    P["POST /ai/analyze-photo"]
-    SO["POST /ai/structure-observation"]
-    EG["POST /ai/engine-check"]
-    AQ["POST /ai/audio-evidence-qa"]
-    R["POST /sessions/{id}/complete"]
-  end
-
-  subgraph Responses["Responses"]
-    Vehicle["vehicle profile"]
-    Plan["inspection plan"]
-    Upload["uploadUrl + objectKey"]
-    Guidance["guidance + status + confidence"]
-    PhotoQA["accept/retake + problems"]
-    Field["structured Cars24 field"]
-    EngineResult["engine questions + structured fields"]
-    AudioResult["optional audio evidence quality"]
-    Report["submitted + reportUrl"]
-  end
-
-  A --> V --> Vehicle
-  A --> S --> Plan
-  C --> U --> Upload
-  B --> LF --> Guidance
-  C --> P --> PhotoQA
-  D --> SO --> Field
-  E --> EG --> EngineResult
-  E --> AQ --> AudioResult
-  F --> R --> Report
+flowchart TD
+  Bucket["S3 evidence bucket"] --> Sessions["sessions/{sessionId}/"]
+  Sessions --> Photos["photos/{stepId}.jpg"]
+  Sessions --> Audio["audio/engine.m4a<br/>optional presigned upload path"]
 ```
 
-## Endpoint Payload Cheatsheet
+Current report JSON and HTML are generated from DynamoDB-backed report payloads and served by FastAPI at `/sessions/{sessionId}/report` and `/sessions/{sessionId}/report.html`.
 
-| Endpoint | Request In | Response Out |
+## Current Demo Inspection Plan
+
+```mermaid
+flowchart TD
+  Vehicle["KA03MX2147<br/>2020 Hyundai Creta SX Petrol Automatic"] --> Plan["SUV Petrol Automatic Inspection Plan"]
+  Plan --> Front["1. Front Main<br/>photo"]
+  Front --> Rear["2. Rear Main<br/>photo"]
+  Rear --> Dash["3. Dashboard and odometer reading<br/>photo"]
+  Dash --> Engine["4. Engine sound condition<br/>engine-guided"]
+  Engine --> Submit["Submit inspection"]
+  Submit --> Report["AI Inspection Quality Report<br/>JSON + downloadable HTML"]
+```
+
+## API Surface
+
+| Endpoint | Owner | Current role |
 |---|---|---|
-| `POST /vehicles/lookup` | `registrationNumber` | `vehicle` |
-| `POST /sessions` | `registrationNumber` | `sessionId`, `vehicle`, `plan.steps[]` |
-| `POST /uploads/presign` | `sessionId`, `stepId`, `kind`, `contentType` | `uploadUrl`, `objectKey` |
-| `POST /ai/analyze-live-frame` | `sessionId`, `stepId`, `frameBase64`, `expectedParts[]` | `guidance`, `status`, `readyToCapture`, `confidence` |
-| `POST /ai/analyze-photo` | `sessionId`, `stepId`, `imageUrl`, `expectedParts[]` | `stepPassed`, `visibleParts[]`, `problems[]`, `nextInstruction` |
-| `POST /ai/structure-observation` | `sessionId`, `stepId`, `transcript` | `fieldId`, `issue`, `severity`, `confidence` |
-| `POST /ai/engine-check` | `sessionId`, `stepId`, `phase`, `jockeyAnswers[]` | `nextInstruction`, `questions[]`, `structuredFields[]`, `confidence` |
-| `POST /ai/audio-evidence-qa` | `sessionId`, `audioUrl`, `localMetrics` | `accepted`, `qualityScore`, `evidenceNote` |
-| `GET /voice/config` | none | `provider`, `llmProvider`, `transport`, `startUrl`, `model`, `voice`, `ready`, `missing[]` |
-| `POST /voice/transcript-turn` | `sessionId`, `stepId`, `transcript` | `type`, `message`, `structuredFields`, `nextStep`, `session` |
-| `POST /sessions/{id}/complete` | `sessionId` | `status`, `reportUrl`, `dashboardUrl`, `emailStatus` |
+| `GET /health` | `app/main.py` | EC2/container health check |
+| `POST /profiles` | `routes/profiles.py` | Create Jockey profile |
+| `GET /profiles` | `routes/profiles.py` | List profiles |
+| `GET /profiles/{profileId}` | `routes/profiles.py` | Refresh cached mobile profile |
+| `POST /vehicles/lookup` | `routes/vehicles.py` | Lookup seeded demo registration |
+| `GET /vehicles` | `routes/vehicles.py` | List seeded demo vehicles |
+| `POST /sessions` | `routes/sessions.py` | Create session and snapshot dynamic plan |
+| `POST /sessions/{sessionId}/start` | `routes/sessions.py` | Activate first step and return greeting metadata |
+| `GET /sessions/{sessionId}` | `routes/sessions.py` | Load session state |
+| `POST /sessions/{sessionId}/complete` | `routes/sessions.py` | Validate completion and create report |
+| `POST /sessions/{sessionId}/report` | `routes/sessions.py` | Create report without marking completion again |
+| `GET /sessions/{sessionId}/report` | `routes/sessions.py` | Return report JSON |
+| `GET /sessions/{sessionId}/report.html` | `routes/sessions.py` | Return downloadable report HTML |
+| `POST /ai/analyze-live-frame` | `routes/ai.py` | Deterministic sample-frame guidance |
+| `POST /ai/structure-observation` | `routes/ai.py` | Structure a transcript for a step that needs observation |
+| `POST /ai/engine-check` | `routes/ai.py` | Structure engine Q&A and mark ready for submission |
+| `POST /evidence/photo` | `routes/evidence.py` | Store photo evidence and advance photo step |
+| `POST /uploads/presign` | `routes/uploads.py` | Create S3 presigned upload URL |
+| `GET /voice/config` | `routes/voice.py` | Return Pipecat provider/model/voice readiness |
+| `POST /voice/transcript-turn` | `routes/voice.py` | Fallback transcript-to-session update path |
+| `POST /start` | `voice/webrtc.py` | Start Small WebRTC session |
+| `POST /api/offer` | `voice/webrtc.py` | WebRTC offer endpoint |
+| `PATCH /api/offer` | `voice/webrtc.py` | WebRTC ICE candidate endpoint |
+| `POST /debug/inspection-flow-log` | `routes/debug.py` | Dev-only NDJSON inspection flow log |
 
-## AI Contract Flow
+## Environment Contract
 
-```mermaid
-flowchart TD
-  Input["Vehicle + Step + Evidence"] --> Router{"AI task"}
+| Variable | Used by | Meaning |
+|---|---|---|
+| `JOCKEY_COPILOT_STORAGE_BACKEND=dynamodb` | `app.database.__init__` | Selects the deployed DynamoDB adapter |
+| `JOCKEY_COPILOT_DDB_TABLE` | `dynamodb_backend.py` | DynamoDB table name |
+| `JOCKEY_COPILOT_S3_BUCKET` | `storage/s3_store.py`, `routes/evidence.py`, `routes/uploads.py` | Evidence bucket name |
+| `AWS_REGION` | boto3 clients | DynamoDB/S3 region |
+| `VOICE_LLM_PROVIDER` | `voice/config.py` | `gemini` default or `openai` rollback |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Gemini Live runtime | Required for Gemini voice readiness |
+| `OPENAI_API_KEY` | OpenAI Realtime runtime | Required only when `VOICE_LLM_PROVIDER=openai` |
+| `JOCKEY_COPILOT_VOICE_BASE_URL` | mobile voice config | Base URL returned by `/voice/config` |
+| `JOCKEY_COPILOT_ICE_SERVERS_JSON` | Small WebRTC | Optional STUN/TURN override |
+| `JOCKEY_COPILOT_FLOW_LOG_PATH` | debug route | Dev-only local NDJSON flow log path |
 
-  Router --> Live["Live frame guidance"]
-  Router --> Photo["Final photo QA"]
-  Router --> Voice["Voice structuring"]
-  Router --> Engine["Engine check guidance"]
-  Router --> Audio["Optional audio evidence QA"]
-  Router --> Report["External report generation"]
+## Current Boundaries
 
-  Live --> LiveJSON["JSON:<br/>guidance, status, visibleParts,<br/>missingParts, readyToCapture, confidence"]
-  Photo --> PhotoJSON["JSON:<br/>stepPassed, visibleParts,<br/>problems, nextInstruction,<br/>confidence, severity"]
-  Voice --> VoiceJSON["JSON:<br/>section, fieldId, issue,<br/>severity, dent/rust/repaint flags, confidence"]
-  Engine --> EngineJSON["JSON:<br/>nextInstruction, questions,<br/>structuredFields, confidence"]
-  Audio --> AudioJSON["JSON:<br/>accepted, reason, qualityScore,<br/>evidenceNote"]
-  Report --> ReportJSON["HTML + JSON:<br/>summary, scores, issues,<br/>retakes, pricingRisk, opsFeedback"]
-```
-
-## Storage Layout
-
-```mermaid
-flowchart TD
-  Bucket["S3 Bucket: jockey-copilot-evidence"] --> Session["sessions/{sessionId}/"]
-  Session --> Photos["photos/{stepId}.jpg"]
-  Session --> Audio["audio/engine.m4a<br/>optional evidence"]
-  Session --> ReportHTML["report/report.html"]
-  Session --> ReportJSON["report/report.json"]
-
-  Table["SQLite: inspection_sessions"] --> PK["PK: sessionId"]
-  PK --> Meta["vehicle + plan + status"]
-  PK --> Evidence["evidence metadata"]
-  PK --> Interventions["AI interventions"]
-  PK --> FinalReport["final report summary"]
-```
-
-## Deployment Diagram
-
-```mermaid
-flowchart LR
-  Dev["Developer Laptop"] --> Expo["Expo Dev Build<br/>Android device"]
-  Dev --> SAM["AWS SAM / Serverless deploy"]
-
-  Expo --> APIGW["API Gateway HTTPS"]
-  APIGW --> Lambda["Lambda<br/>FastAPI + Mangum"]
-  Lambda --> DDB["SQLite local file<br/>replaceable DB adapter"]
-  Lambda --> S3["S3"]
-  Lambda --> SES["SES/email provider<br/>optional"]
-  Lambda --> Secrets["Lambda env / Secrets Manager<br/>GOOGLE_API_KEY or OPENAI_API_KEY"]
-  Lambda --> VoiceLLM["Gemini Live or OpenAI Realtime API"]
-```
-
-## Error And Fallback Flow
-
-```mermaid
-flowchart TD
-  Action["Inspection action"] --> Failure{"Failure type"}
-  Failure --> CameraDenied["Camera permission denied"]
-  Failure --> AISlow["AI slow/unavailable"]
-  Failure --> UploadFail["S3 upload failed"]
-  Failure --> AudioDenied["Mic permission denied"]
-
-  CameraDenied --> DemoPhoto["Use demo photo picker"]
-  AISlow --> LocalQA["Show local QA + canned instruction"]
-  UploadFail --> LocalURI["Keep local file URI + retry upload"]
-  AudioDenied --> NoAudio["Continue with guided engine questions only"]
-
-  DemoPhoto --> SameAPI["Continue through same backend API"]
-  LocalQA --> SameAPI
-  LocalURI --> SameAPI
-  NoAudio --> SameAPI
-```
-
-## Build Board
-
-```mermaid
-flowchart TD
-  S1["Sprint 1<br/>Foundation<br/>FastAPI + Expo dev build + mock session"] --> S2["Sprint 2<br/>Inspection shell<br/>Stepper + VisionCamera preview"]
-  S2 --> S3["Sprint 3<br/>AI wow moment<br/>Live guidance + auto-capture + S3"]
-  S3 --> S4["Sprint 4<br/>Evidence intelligence<br/>Final photo QA + voice + guided engine check"]
-  S4 --> S5["Sprint 5<br/>Winning demo<br/>External report + demo mode + polish"]
-```
-
-## Build Order Checklist
-
-| Order | Build Unit | Done When |
-|---:|---|---|
-| 1 | FastAPI skeleton | `/health` works locally |
-| 2 | Expo dev build skeleton | Android app opens |
-| 3 | Mock vehicle lookup | Registration returns Creta demo profile |
-| 4 | Session + plan generation | App receives ordered inspection steps |
-| 5 | Stepper UI | Jockey can move through steps |
-| 6 | VisionCamera preview | Camera permission + live preview works |
-| 7 | Live frame endpoint | Frame returns short guidance JSON |
-| 8 | Auto-capture | `readyToCapture` hold triggers `takePhoto()` |
-| 9 | Presigned upload | Photo reaches S3 |
-| 10 | Final photo QA | Accept/retake works for one photo step |
-| 11 | Voice observation | Transcript maps to Cars24 field |
-| 12 | Guided engine check | App gives listen instructions and structures Jockey answers |
-| 13 | Optional audio evidence | Recording uploads and is marked usable/unusable as evidence |
-| 14 | External report | Backend writes `report.html` and `report.json` for dashboard/email |
-| 15 | Demo mode | Curated media can run the same flow |
-
-## Non-Negotiable Interfaces
-
-```mermaid
-flowchart TD
-  A["LiveGuidanceCamera"] -->|"onCapture(EvidenceItem)"| B["InspectionScreen"]
-  G["EngineGuidedCheck"] -->|"onEngineFields(StructuredObservation[])"| B
-  H["SubmittedScreen"] -->|"onSubmit(sessionId)"| D
-  B -->|"saveEvidence"| C["inspectionStore"]
-  B -->|"saveObservation"| C
-  B -->|"POST typed request"| D["api/client.ts"]
-  D -->|"Pydantic-compatible JSON"| E["FastAPI routes"]
-  E -->|"service call"| F["OpenAI/S3/SQLite services"]
-  F -->|"strict JSON response"| D
-  D -->|"Zod parse"| B
-```
-
-## Hack Scope Boundary
-
-```mermaid
-quadrantChart
-  title Scope Decision
-  x-axis Low business impact --> High business impact
-  y-axis Low feasibility --> High feasibility
-  quadrant-1 Build first
-  quadrant-2 Big bets
-  quadrant-3 Avoid
-  quadrant-4 Nice polish
-  "Live AI framing guidance": [0.86, 0.78]
-  "Auto-capture evidence": [0.82, 0.80]
-  "Mock registration lookup": [0.58, 0.95]
-  "External quality report": [0.80, 0.84]
-  "Guided engine check": [0.70, 0.78]
-  "Optional engine audio evidence": [0.58, 0.72]
-  "Full 133-field checklist": [0.70, 0.28]
-  "Raw video streaming to AI": [0.55, 0.22]
-  "Real RC/challan integration": [0.66, 0.20]
-```
+- The backend is not currently a Lambda/Mangum service. It is a Dockerized FastAPI service running on EC2.
+- The deployed backend state is DynamoDB-backed. SQLite is a local/test adapter, not the deployed architecture.
+- S3 is the backend media bucket for evidence objects and presigned upload URLs.
+- The mobile app does not hold AI provider keys. Voice provider configuration and readiness are resolved by the backend.
+- The realtime photo-review path uses the Pipecat voice bot and tool calls to accept evidence. The `/ai/analyze-live-frame` path is a deterministic sample fallback used by tests and local demo flows.
+- The current seeded plan has four steps: `front-main`, `rear-main`, `dashboard-odometer`, and `engine-sound`.
