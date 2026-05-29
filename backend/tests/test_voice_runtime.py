@@ -146,6 +146,8 @@ def test_realtime_instruction_includes_vehicle_step_language_and_guardrails():
     assert "2020 Hyundai Creta" in instruction
     assert "Front Main" in instruction
     assert "camera frames" in instruction
+    assert "Use the active SYSTEM_EVENT required parts" in instruction
+    assert "For Front Main, confirm" not in instruction
     assert "record_frame_intervention" in instruction
     assert "Do not diagnose mechanical condition from audio" in instruction
     assert "SYSTEM_GUIDANCE:" in instruction

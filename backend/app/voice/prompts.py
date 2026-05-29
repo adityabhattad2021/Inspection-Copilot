@@ -74,8 +74,8 @@ def build_realtime_instruction(
             (
                 "You will receive camera frames for photo steps. Judge whether "
                 "the requested vehicle parts are visible, centered, and usable. "
-                "For Front Main, confirm the front bumper, bonnet line, "
-                "headlight, and front-left tyre are clearly visible."
+                "Use the active SYSTEM_EVENT required parts for the current "
+                "photo step."
             ),
             (
                 "When the live frame is not usable, speak one short physical "

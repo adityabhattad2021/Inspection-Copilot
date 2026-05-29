@@ -371,7 +371,8 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   const activeStep = session ? findActiveInspectionStep(session) : null;
   const stepMedia = activeStep ? getInspectionStepMedia(activeStep.id) : null;
   const currentFrame = stepMedia?.frames[frameIndex] ?? null;
-  const isRealtimeCameraStep = activeStep?.id === "front-main";
+  const isRealtimeCameraStep =
+    activeStep?.kind === "photo" && activeStep.status !== "needs_observation";
 
   useEffect(() => {
     activeStepRef.current = activeStep;
@@ -509,7 +510,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     }
 
     if (blockers.length > 0) {
-      if (activeStep?.id === "front-main") {
+      if (activeStep?.kind === "photo") {
         logInspectionScreen("camera-start:waiting", {
           blockers,
           hasVideoTrack: Boolean(localVideoTrack),
