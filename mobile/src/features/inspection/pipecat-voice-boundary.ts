@@ -11,6 +11,10 @@ import type {
   MediaStreamTrack as DailyMediaStreamTrack,
 } from "@daily-co/react-native-webrtc";
 import type { RNSmallWebRTCTransport as RNSmallWebRTCTransportInstance } from "@pipecat-ai/react-native-small-webrtc-transport";
+import type {
+  InspectionSession,
+  InspectionStep,
+} from "@/src/api/client";
 
 export type AgentProcessingPhase = "function" | "llm" | "tts";
 
@@ -42,12 +46,25 @@ export type InspectionVoiceEvent =
       type: "capture-requested";
     }
   | {
+      readyToCapture: boolean;
+      status: string;
+      text: string;
+      type: "frame-intervention";
+    }
+  | {
       contentPreview: string;
       type: "inspection-control-ack";
     }
   | {
       error: string;
       type: "inspection-control-error";
+    }
+  | {
+      message: string;
+      nextStep: InspectionStep | null;
+      resultType: string;
+      session: InspectionSession;
+      type: "voice-session-updated";
     }
   | {
       type: "local-video-track";
@@ -67,8 +84,14 @@ export type InspectionVoiceConnectRequest = {
 export type InspectionVoiceDriver = {
   connect: (request: InspectionVoiceConnectRequest) => Promise<void>;
   disconnect: () => Promise<void>;
-  sendAgentMessage: (text: string) => Promise<void>;
-  sendControlEvent: (text: string) => Promise<void>;
+  sendControlEvent: (
+    text: string,
+    options?: {
+      imageDataUrl?: string;
+      sourceUri?: string;
+      stepId?: string;
+    },
+  ) => Promise<void>;
 };
 
 export const PIPECAT_VOICE_BOUNDARY = {
@@ -120,6 +143,31 @@ function getCaptureStepId(data: unknown): string | null {
   return null;
 }
 
+function getFrameIntervention(data: unknown): {
+  readyToCapture: boolean;
+  status: string;
+  text: string;
+} | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const type = "type" in data ? data.type : null;
+  const message = "message" in data ? data.message : null;
+  if (type !== "frame_intervention" || typeof message !== "string") {
+    return null;
+  }
+
+  const status = "status" in data ? data.status : null;
+  const readyToCapture = "readyToCapture" in data ? data.readyToCapture : null;
+
+  return {
+    readyToCapture: readyToCapture === true,
+    status: typeof status === "string" ? status : "unknown",
+    text: message,
+  };
+}
+
 function getInspectionControlAck(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;
@@ -146,6 +194,40 @@ function getInspectionControlError(data: unknown): string | null {
   }
 
   return null;
+}
+
+function getVoiceSessionUpdate(data: unknown): {
+  message: string;
+  nextStep: InspectionStep | null;
+  resultType: string;
+  session: InspectionSession;
+} | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const type = "type" in data ? data.type : null;
+  const session = "session" in data ? data.session : null;
+  if (
+    !["photo_acceptance", "observation", "engine"].includes(String(type)) ||
+    !session ||
+    typeof session !== "object"
+  ) {
+    return null;
+  }
+
+  const message = "message" in data ? data.message : null;
+  const nextStep = "nextStep" in data ? data.nextStep : null;
+
+  return {
+    message: typeof message === "string" ? message : "",
+    nextStep:
+      nextStep && typeof nextStep === "object"
+        ? (nextStep as InspectionStep)
+        : null,
+    resultType: String(type),
+    session: session as InspectionSession,
+  };
 }
 
 function isLocalParticipant(participant?: Participant) {
@@ -179,6 +261,9 @@ function selectBackCamera(cameras: readonly MediaDeviceInfo[]) {
 }
 
 const INSPECTION_CONTROL_MESSAGE_TYPE = "inspection-control";
+const INSPECTION_CONTROL_PHOTO_CHUNK_MESSAGE_TYPE =
+  "inspection-control-photo-chunk";
+const INSPECTION_CONTROL_PHOTO_CHUNK_SIZE = 24000;
 const INSPECTION_LOG_PREFIX = "[inspection-rtvi]";
 const INSPECTION_LOG_PREVIEW_LENGTH = 180;
 
@@ -195,6 +280,20 @@ function logInspectionRtvi(event: string, data?: unknown) {
   }
 
   console.log(INSPECTION_LOG_PREFIX, event, data);
+}
+
+function createPhotoTransferId() {
+  return `photo_${Date.now().toString(36)}_${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
+}
+
+function splitTextIntoChunks(text: string, chunkSize: number) {
+  const chunks: string[] = [];
+  for (let index = 0; index < text.length; index += chunkSize) {
+    chunks.push(text.slice(index, index + chunkSize));
+  }
+  return chunks;
 }
 
 export function createInspectionVoiceDriver(
@@ -274,14 +373,53 @@ function createNativePipecatVoiceDriver(
     }
   }
 
-  function sendInspectionControlMessage(content: string) {
+  function sendInspectionControlMessage(
+    content: string,
+    options?: {
+      imageDataUrl?: string;
+      sourceUri?: string;
+      stepId?: string;
+    },
+  ) {
     if (!client) {
       throw new Error("Realtime voice client is not connected.");
     }
 
-    logInspectionRtvi("send inspection-control", previewText(content));
+    let imageTransferId: string | undefined;
+    if (options?.imageDataUrl) {
+      imageTransferId = createPhotoTransferId();
+      const chunks = splitTextIntoChunks(
+        options.imageDataUrl,
+        INSPECTION_CONTROL_PHOTO_CHUNK_SIZE,
+      );
+
+      logInspectionRtvi("send inspection-control-photo-chunks", {
+        chunkCount: chunks.length,
+        imageCharacters: options.imageDataUrl.length,
+        stepId: options.stepId ?? null,
+        transferId: imageTransferId,
+      });
+
+      chunks.forEach((chunk, chunkIndex) => {
+        client?.sendClientMessage(INSPECTION_CONTROL_PHOTO_CHUNK_MESSAGE_TYPE, {
+          chunk,
+          chunkCount: chunks.length,
+          chunkIndex,
+          transferId: imageTransferId,
+        });
+      });
+    }
+
+    logInspectionRtvi("send inspection-control", {
+      hasPhoto: Boolean(imageTransferId),
+      preview: previewText(content),
+      stepId: options?.stepId ?? null,
+    });
     client.sendClientMessage(INSPECTION_CONTROL_MESSAGE_TYPE, {
       content,
+      imageTransferId,
+      sourceUri: options?.sourceUri,
+      stepId: options?.stepId,
     });
   }
 
@@ -356,6 +494,17 @@ function createNativePipecatVoiceDriver(
           },
           onServerMessage: (data: unknown) => {
             logInspectionRtvi("server-message", data);
+            const frameIntervention = getFrameIntervention(data);
+            if (frameIntervention) {
+              onEvent({
+                readyToCapture: frameIntervention.readyToCapture,
+                status: frameIntervention.status,
+                text: frameIntervention.text,
+                type: "frame-intervention",
+              });
+              return;
+            }
+
             const ack = getInspectionControlAck(data);
             if (ack !== null) {
               onEvent({ contentPreview: ack, type: "inspection-control-ack" });
@@ -367,6 +516,18 @@ function createNativePipecatVoiceDriver(
               onEvent({
                 error: controlError,
                 type: "inspection-control-error",
+              });
+              return;
+            }
+
+            const voiceSessionUpdate = getVoiceSessionUpdate(data);
+            if (voiceSessionUpdate) {
+              onEvent({
+                message: voiceSessionUpdate.message,
+                nextStep: voiceSessionUpdate.nextStep,
+                resultType: voiceSessionUpdate.resultType,
+                session: voiceSessionUpdate.session,
+                type: "voice-session-updated",
               });
               return;
             }
@@ -433,11 +594,8 @@ function createNativePipecatVoiceDriver(
       nativeTransport = null;
       onEvent({ type: "local-video-track", videoTrack: null });
     },
-    async sendAgentMessage(text: string) {
-      sendInspectionControlMessage(`SYSTEM_GUIDANCE: ${text}`);
-    },
-    async sendControlEvent(text: string) {
-      sendInspectionControlMessage(`SYSTEM_EVENT: ${text}`);
+    async sendControlEvent(text: string, options) {
+      sendInspectionControlMessage(`SYSTEM_EVENT: ${text}`, options);
     },
   };
 }

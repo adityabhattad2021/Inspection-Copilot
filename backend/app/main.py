@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.routes.ai import router as ai_router
+from app.routes.debug import router as debug_router
 from app.routes.evidence import router as evidence_router
 from app.routes.profiles import router as profiles_router
 from app.routes.sessions import router as sessions_router
@@ -21,6 +22,7 @@ app.include_router(profiles_router)
 app.include_router(sessions_router)
 app.include_router(ai_router)
 app.include_router(evidence_router)
+app.include_router(debug_router)
 app.include_router(voice_router)
 app.include_router(voice_webrtc_router)
 app.add_event_handler("shutdown", close_voice_webrtc)

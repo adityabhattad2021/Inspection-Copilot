@@ -54,21 +54,33 @@ export function getProgressSteps(session: InspectionSession): ProgressStep[] {
   }));
 }
 
-export function getInspectionStepVoiceInstruction(
+export function getInspectionStepChangedEvent(
   step: InspectionStep,
   index: number,
 ) {
-  const stepNumber = index + 1;
+  const expectedParts =
+    step.expectedParts.length > 0
+      ? `Expected parts: ${step.expectedParts.join(", ")}.`
+      : "Expected parts: none.";
+  const action =
+    step.status === "needs_observation"
+      ? step.id === "lhs-front-door"
+        ? "Ask the jockey one short question to classify the visible door mark as scratch, dent, rust, or dirt, then keep listening for the answer."
+        : "Ask the jockey one short question for the field observation, then keep listening for the answer."
+      : step.kind === "engine-guided"
+        ? "Guide the engine-sound check one short step at a time, then ask for knocking, rattling, idle vibration, and exhaust sound."
+        : "Tell the jockey what to do for this step in your own short field-inspection words.";
 
-  if (step.kind === "engine-guided") {
-    return `Step ${stepNumber}: ${step.fieldName}. ${step.instructions}`;
-  }
-
-  if (step.kind === "photo") {
-    return `Step ${stepNumber}: ${step.fieldName}. ${step.instructions} I will tell you when to hold.`;
-  }
-
-  return `Step ${stepNumber}: ${step.fieldName}. ${step.instructions}`;
+  return [
+    `STEP_CHANGED ${index + 1}: ${step.fieldName}.`,
+    `Step id: ${step.id}.`,
+    `Step kind: ${step.kind}.`,
+    `Step status: ${step.status}.`,
+    `Inspection instruction: ${step.instructions}`,
+    expectedParts,
+    action,
+    "This is a hidden lifecycle event, not a script.",
+  ].join(" ");
 }
 
 export function getRealtimeCameraStepStartEvent(
@@ -76,21 +88,22 @@ export function getRealtimeCameraStepStartEvent(
   index: number,
 ) {
   return [
-    `START_STEP ${index + 1}: ${step.fieldName}.`,
-    step.instructions,
-    "The Android camera feed is live.",
-    "Take control now: speak one direct physical camera instruction for this step, inspect the latest frame, and call record_frame_intervention with status adjust or hold.",
-    "Speak the actual movement or hold instruction only, with no setup or debug wording.",
+    getInspectionStepChangedEvent(step, index),
+    "The Android camera preview is live for the jockey.",
+    "Do not judge the camera preview from STEP_CHANGED.",
+    "Ask the jockey to tap Capture when the requested view is framed.",
+    "Wait for CAPTURED_PHOTO_REVIEW before deciding whether to accept or retake.",
   ].join(" ");
 }
 
-export function getRealtimeCameraFrameTickEvent(step: InspectionStep) {
+export function getCapturedPhotoReviewEvent(step: InspectionStep) {
   return [
-    `FRAME_TICK for ${step.fieldName}.`,
-    "Judge the latest live camera frame now.",
+    `CAPTURED_PHOTO_REVIEW for ${step.fieldName}.`,
+    `Step id: ${step.id}.`,
     `Required parts: ${step.expectedParts.join(", ")}.`,
-    "If framing is not usable, speak one direct physical camera movement instruction and call record_frame_intervention with status adjust.",
-    "If framing is acceptable, say hold steady and call record_frame_intervention with status hold.",
+    "Review the uploaded still photo now.",
+    "If the photo is acceptable, call accept_photo with this stepId.",
+    "If the photo needs a retake, do not call any tool; speak one direct physical fix.",
     "Speak only the next physical action, with no setup or debug wording.",
   ].join(" ");
 }

@@ -72,28 +72,31 @@ def build_realtime_instruction(
             "Inspection plan:",
             *step_lines,
             (
-                "You will receive camera frames for photo steps. Judge whether "
-                "the requested vehicle parts are visible, centered, and usable. "
-                "Use the active SYSTEM_EVENT required parts for the current "
-                "photo step."
+                "For photo steps, the jockey manually captures a still photo. "
+                "You will receive that captured still photo with a hidden "
+                "CAPTURED_PHOTO_REVIEW event. Judge whether the requested "
+                "vehicle parts are visible, centered, and usable."
             ),
             (
-                "When the live frame is not usable, speak one short physical "
-                "camera instruction and call record_frame_intervention with "
-                "status adjust. If the camera points at the wrong target, say "
-                "where to point it, for example 'camera car front par lao'. "
-                "When it is acceptable, speak a hold-steady callout and call "
-                "record_frame_intervention with status hold so the mobile app "
-                "receives capture_now. Do not ask the app to capture by spoken "
-                "text only."
+                "If a captured photo is acceptable, speak a short acceptance "
+                "callout and call accept_photo with the current step id. If it "
+                "is not acceptable, do not call any tool; speak exactly one "
+                "physical fix such as step back, tilt left, include the tyre, "
+                "or move to the requested side. Speech alone never advances "
+                "photo state."
             ),
-            "When a text message begins with SYSTEM_GUIDANCE:, say only the guidance after the prefix as a spoken instruction. Do not treat it as the jockey's answer.",
+            (
+                "Tool result messages are internal state, not scripts to read "
+                "aloud. Do not wait for the mobile app to echo guidance."
+            ),
             (
                 "When a text message begins with SYSTEM_EVENT:, it is a hidden "
                 "mobile app lifecycle event. Do not read the prefix aloud and "
-                "do not wait for the jockey. Take control: speak the useful "
-                "next field instruction or judge the latest camera frame, then "
-                "call the right tool when the frame decision is adjust or hold."
+                "do not wait for the jockey. Follow the event facts and decide "
+                "your own short spoken guidance. For STEP_CHANGED, tell the "
+                "jockey what to do next without judging a photo. For "
+                "CAPTURED_PHOTO_REVIEW, review the uploaded photo. Call "
+                "accept_photo only when the photo is good enough to save."
             ),
             "For LHS door damage answers, call record_door_observation with the jockey's exact answer.",
             "For engine-sound answers, ask the jockey to report knocking, rattling, idle vibration, and exhaust sound, then call record_engine_observation.",

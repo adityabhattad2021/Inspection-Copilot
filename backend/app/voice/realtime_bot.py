@@ -1,3 +1,5 @@
+import base64
+import json
 import os
 from typing import Any
 
@@ -10,7 +12,11 @@ from pipecat.transports.base_transport import TransportParams
 from app.database import load_session_payload
 from app.voice.config import get_voice_runtime_config
 from app.voice.prompts import build_realtime_instruction
-from app.voice.tools import build_voice_function_handlers, build_voice_tools
+from app.voice.tools import (
+    PendingPhotoReview,
+    build_voice_function_handlers,
+    build_voice_tools,
+)
 
 
 LANGUAGE_TRANSCRIPTION_CODES = {
@@ -22,6 +28,9 @@ LANGUAGE_TRANSCRIPTION_CODES = {
 INSPECTION_CONTROL_ACK_TYPE = "inspection_control_ack"
 INSPECTION_CONTROL_ERROR_TYPE = "inspection_control_error"
 INSPECTION_CONTROL_PREVIEW_LENGTH = 180
+INSPECTION_CONTROL_PHOTO_CHUNK_TYPE = "inspection-control-photo-chunk"
+MAX_PHOTO_TRANSFER_CHUNKS = 128
+RealtimePhotoTransfers = dict[str, list[str | None]]
 
 
 def _runner_body(runner_args: Any) -> dict[str, Any]:
@@ -106,6 +115,45 @@ def build_realtime_text_events(
     return item_event, events.ResponseCreateEvent()
 
 
+def build_realtime_photo_review_events(
+    content: str,
+    image_data_url: str,
+    detail: str = "high",
+) -> tuple[events.ConversationItemCreateEvent, events.ResponseCreateEvent]:
+    item_event = events.ConversationItemCreateEvent(
+        item=events.ConversationItem(
+            role="user",
+            type="message",
+            content=[
+                events.ItemContent(type="input_text", text=content),
+                events.ItemContent(
+                    type="input_image",
+                    image_url=image_data_url,
+                    detail=detail,
+                ),
+            ],
+        ),
+    )
+    return item_event, events.ResponseCreateEvent()
+
+
+def build_realtime_tool_result_events(
+    tool_call_id: str,
+    result: dict[str, Any],
+    *,
+    create_response: bool = True,
+) -> tuple[events.ConversationItemCreateEvent, events.ResponseCreateEvent | None]:
+    item_event = events.ConversationItemCreateEvent(
+        item=events.ConversationItem(
+            type="function_call_output",
+            call_id=tool_call_id,
+            output=json.dumps(result, ensure_ascii=False),
+        ),
+    )
+    response_event = events.ResponseCreateEvent() if create_response else None
+    return item_event, response_event
+
+
 def build_inspection_control_ack(content: str) -> dict[str, Any]:
     return {
         "contentPreview": content[:INSPECTION_CONTROL_PREVIEW_LENGTH],
@@ -131,8 +179,62 @@ def build_voice_transport_params() -> TransportParams:
         audio_out_enabled=True,
         audio_in_sample_rate=24000,
         audio_out_sample_rate=24000,
-        video_in_enabled=True,
+        video_in_enabled=False,
     )
+
+
+def decode_image_data_url(image_data_url: str) -> tuple[bytes, str]:
+    header, separator, encoded = image_data_url.partition(",")
+    if separator != "," or not header.startswith("data:"):
+        raise ValueError("Captured photo must be a data URL")
+    if not header.endswith(";base64"):
+        raise ValueError("Captured photo data URL must be base64 encoded")
+
+    mime_type = header.removeprefix("data:").removesuffix(";base64")
+    if not mime_type.startswith("image/"):
+        raise ValueError("Captured photo must be an image")
+
+    image_bytes = base64.b64decode(encoded, validate=True)
+    if not image_bytes:
+        raise ValueError("Captured photo is empty")
+    return image_bytes, mime_type
+
+
+def store_realtime_photo_transfer_chunk(
+    transfers: RealtimePhotoTransfers,
+    *,
+    transfer_id: str,
+    chunk_index: int,
+    chunk_count: int,
+    chunk: str,
+) -> None:
+    if not transfer_id.strip():
+        raise ValueError("Captured photo transfer requires transferId")
+    if chunk_count <= 0 or chunk_count > MAX_PHOTO_TRANSFER_CHUNKS:
+        raise ValueError("Captured photo transfer chunk count is invalid")
+    if chunk_index < 0 or chunk_index >= chunk_count:
+        raise ValueError("Captured photo transfer chunk index is invalid")
+    if not isinstance(chunk, str) or not chunk:
+        raise ValueError("Captured photo transfer chunk is empty")
+
+    existing_chunks = transfers.setdefault(transfer_id, [None] * chunk_count)
+    if len(existing_chunks) != chunk_count:
+        raise ValueError("Captured photo transfer chunk count changed")
+    existing_chunks[chunk_index] = chunk
+
+
+def resolve_realtime_photo_transfer(
+    transfers: RealtimePhotoTransfers,
+    transfer_id: str,
+) -> str:
+    chunks = transfers.get(transfer_id)
+    if chunks is None:
+        raise ValueError("Captured photo transfer was not found")
+    if any(chunk is None for chunk in chunks):
+        raise ValueError("Captured photo transfer is incomplete")
+
+    transfers.pop(transfer_id, None)
+    return "".join(chunk for chunk in chunks if chunk is not None)
 
 
 async def bot(runner_args: Any):
@@ -191,14 +293,55 @@ async def bot(runner_args: Any):
     async def send_capture_command(command: dict[str, Any]) -> None:
         await rtvi.send_server_message(command)
 
+    async def send_frame_intervention(intervention: dict[str, Any]) -> None:
+        await rtvi.send_server_message(intervention)
+
+    async def send_voice_result(result: dict[str, Any]) -> None:
+        await rtvi.send_server_message(result)
+
     async def inject_realtime_user_text(content: str) -> None:
         item_event, response_event = build_realtime_text_events(content)
         await llm.send_client_event(item_event)
         await llm.send_client_event(response_event)
 
+    async def inject_realtime_photo_review(
+        content: str,
+        image_data_url: str,
+    ) -> None:
+        item_event, response_event = build_realtime_photo_review_events(
+            content,
+            image_data_url,
+        )
+        await llm.send_client_event(item_event)
+        await llm.send_client_event(response_event)
+
+    async def send_realtime_tool_result(
+        tool_call_id: str,
+        result: dict[str, Any],
+        create_response: bool,
+    ) -> None:
+        item_event, response_event = build_realtime_tool_result_events(
+            tool_call_id,
+            result,
+            create_response=create_response,
+        )
+        await llm.send_client_event(item_event)
+        if response_event:
+            await llm.send_client_event(response_event)
+
+    pending_photo_reviews: dict[str, PendingPhotoReview] = {}
+    photo_transfers: RealtimePhotoTransfers = {}
+
+    def get_pending_photo(step_id: str) -> PendingPhotoReview | None:
+        return pending_photo_reviews.get(step_id)
+
     for name, handler in build_voice_function_handlers(
         session_id,
+        get_pending_photo=get_pending_photo,
         on_capture_command=send_capture_command,
+        on_frame_intervention=send_frame_intervention,
+        on_tool_result=send_realtime_tool_result,
+        on_voice_result=send_voice_result,
     ).items():
         llm.register_function(name, handler)
 
@@ -227,6 +370,25 @@ async def bot(runner_args: Any):
 
     @rtvi.event_handler("on_client_message")
     async def on_client_message(_, message):
+        if message.type == INSPECTION_CONTROL_PHOTO_CHUNK_TYPE:
+            data = message.data if isinstance(message.data, dict) else {}
+            try:
+                store_realtime_photo_transfer_chunk(
+                    photo_transfers,
+                    transfer_id=str(data.get("transferId") or ""),
+                    chunk_index=int(data.get("chunkIndex")),
+                    chunk_count=int(data.get("chunkCount")),
+                    chunk=str(data.get("chunk") or ""),
+                )
+            except Exception as exc:
+                logger.exception(
+                    "Failed to store photo chunk session_id={}",
+                    session_id,
+                )
+                await rtvi.send_server_message(build_inspection_control_error(str(exc)))
+                raise
+            return
+
         if message.type != "inspection-control":
             logger.debug(
                 "Ignoring RTVI client message type={} session_id={}",
@@ -246,14 +408,52 @@ async def bot(runner_args: Any):
             return
 
         cleaned_content = content.strip()
+        image_data_url = data.get("imageDataUrl") or data.get("image_data_url")
+        image_transfer_id = data.get("imageTransferId") or data.get("image_transfer_id")
+        step_id = data.get("stepId") or data.get("step_id")
+        source_uri = data.get("sourceUri") or data.get("source_uri")
+        is_photo_review = bool(
+            isinstance(image_data_url, str)
+            and image_data_url.strip()
+            or isinstance(image_transfer_id, str)
+            and image_transfer_id.strip()
+        )
         logger.info(
-            "Received inspection-control session_id={} preview={!r}",
+            "Received inspection-control session_id={} has_photo={} preview={!r}",
             session_id,
+            is_photo_review,
             cleaned_content[:INSPECTION_CONTROL_PREVIEW_LENGTH],
         )
-        await rtvi.send_server_message(build_inspection_control_ack(cleaned_content))
         try:
-            await inject_realtime_user_text(cleaned_content)
+            if is_photo_review:
+                if not isinstance(step_id, str) or not step_id.strip():
+                    raise ValueError("Captured photo review requires stepId")
+                if isinstance(image_transfer_id, str) and image_transfer_id.strip():
+                    image_data_url = resolve_realtime_photo_transfer(
+                        photo_transfers,
+                        image_transfer_id.strip(),
+                    )
+                if not isinstance(image_data_url, str):
+                    raise ValueError("Captured photo review requires an image")
+                image_bytes, mime_type = decode_image_data_url(image_data_url.strip())
+                review_step_id = step_id.strip()
+                pending_photo_reviews[review_step_id] = PendingPhotoReview(
+                    image_bytes=image_bytes,
+                    mime_type=mime_type,
+                    source_uri=str(source_uri) if source_uri else None,
+                )
+                await rtvi.send_server_message(
+                    build_inspection_control_ack(cleaned_content)
+                )
+                await inject_realtime_photo_review(
+                    cleaned_content,
+                    image_data_url.strip(),
+                )
+            else:
+                await rtvi.send_server_message(
+                    build_inspection_control_ack(cleaned_content)
+                )
+                await inject_realtime_user_text(cleaned_content)
             logger.info(
                 "Injected inspection-control into OpenAI Realtime session_id={}",
                 session_id,

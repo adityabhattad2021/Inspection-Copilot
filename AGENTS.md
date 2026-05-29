@@ -12,27 +12,12 @@ If a requirement, file ownership boundary, command, dependency, API shape, or ex
 
 Before making changes, read the smallest set of docs needed for the task:
 
-- `SPRINTS.md` for current task breakdown, file ownership, dependencies, and acceptance checks.
 - `ARCHITECTURE.md` for system diagrams, data flow, and API contracts.
 - `PRD.md` for product scope and non-goals.
 - `GOALS.md` for demo priorities and success criteria.
 - `Makefile`, `backend/Makefile`, and `mobile/Makefile` for commands.
 
 Do not duplicate product decisions inside this file. If product context is needed, read the docs above.
-
-## Work Boundaries
-
-Use `SPRINTS.md` as the source of truth for parallel work.
-
-Before editing, identify:
-
-- sprint number
-- task ID
-- files owned by the task
-- files that must not be touched
-- acceptance command
-
-Do not edit files owned by another task unless the user approves it.
 
 ## Commands
 
@@ -67,6 +52,13 @@ Prefer Makefile commands over raw tool commands. Backend Make targets use `uv` i
 ## Verification
 
 Before claiming work is done, run the relevant acceptance command from `SPRINTS.md`.
+
+Time is tight during this hackathon. Optimize for unblocking the user:
+
+- Do not run tests repeatedly after every small edit.
+- Do not run `git diff` again and again just to restate changes.
+- For docs-only or instruction-only edits, skip test runs unless the user asks for them.
+- For code changes, run the smallest relevant acceptance command once after the final edit, then report the result.
 
 If verification cannot run, say exactly why:
 

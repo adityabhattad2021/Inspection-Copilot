@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   findNodeHandle,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -19,6 +20,8 @@ type RealtimeCameraScreenProps = {
   captureFlash: Animated.Value;
   errorMessage: string | null;
   instruction: string;
+  isBusy: boolean;
+  onCapturePhoto: () => void;
   onVideoViewReady: (viewTag: number | null) => void;
   stepNumber: number;
   stepTitle: string;
@@ -31,6 +34,8 @@ export function RealtimeCameraScreen({
   captureFlash,
   errorMessage,
   instruction,
+  isBusy,
+  onCapturePhoto,
   onVideoViewReady,
   stepNumber,
   stepTitle,
@@ -104,7 +109,7 @@ export function RealtimeCameraScreen({
           <View style={styles.statusPill}>
             <View style={styles.statusDot} />
             <Text selectable style={[typography.small, styles.statusText]}>
-              Live guidance
+              Tap capture
             </Text>
           </View>
         </View>
@@ -133,6 +138,23 @@ export function RealtimeCameraScreen({
           right: spacing.lg,
         }}
       >
+        <Pressable
+          disabled={isBusy || !videoTrack}
+          onPress={onCapturePhoto}
+          style={({ pressed }) => [
+            styles.captureButton,
+            (isBusy || !videoTrack) && styles.captureButtonDisabled,
+            pressed && styles.captureButtonPressed,
+          ]}
+        >
+          <View style={styles.captureRing}>
+            <View style={styles.captureCore} />
+          </View>
+          <Text selectable style={[typography.label, styles.captureButtonText]}>
+            {isBusy ? "Reviewing" : "Capture"}
+          </Text>
+        </Pressable>
+
         <View style={styles.instructionShell}>
           <View style={styles.instructionHeader}>
             <View style={styles.instructionAccent} />
@@ -170,6 +192,43 @@ const styles = StyleSheet.create({
     backgroundColor: colors.camera,
     justifyContent: "center",
     padding: spacing.lg,
+  },
+  captureButton: {
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: colors.ai,
+    borderColor: "rgba(246, 247, 242, 0.78)",
+    borderCurve: "continuous",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 58,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  captureButtonDisabled: {
+    opacity: 0.56,
+  },
+  captureButtonPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  captureButtonText: {
+    color: colors.text,
+  },
+  captureCore: {
+    backgroundColor: colors.text,
+    borderRadius: radius.pill,
+    height: 20,
+    width: 20,
+  },
+  captureRing: {
+    alignItems: "center",
+    backgroundColor: "rgba(246, 247, 242, 0.68)",
+    borderRadius: radius.pill,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
   },
   errorText: {
     color: colors.danger,

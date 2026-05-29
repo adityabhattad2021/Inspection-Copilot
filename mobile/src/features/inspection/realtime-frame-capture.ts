@@ -8,6 +8,7 @@ type RealtimeFrameCaptureOptions = {
 
 export type CapturedRealtimeFrame = {
   bytes: number;
+  dataUrl: string;
   height: number;
   mimeType: "image/jpeg";
   path: string;

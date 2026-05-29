@@ -1,5 +1,8 @@
+import os
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -13,16 +16,40 @@ from app.database import (
     count_completed_steps,
     load_session_payload,
     save_ai_intervention,
+    save_evidence_item,
     save_structured_observation,
     set_session_status,
+    set_step_status,
 )
 from app.routes.sessions import InspectionStep, SessionResponse
 from app.services.ai_stub import structure_observation
 from app.services.engine_check import engine_issue_summary, structure_engine_answers
 
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+
+
+@dataclass(frozen=True)
+class PendingPhotoReview:
+    image_bytes: bytes
+    mime_type: str
+    source_uri: str | None = None
+
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _evidence_root() -> Path:
+    return Path(
+        os.environ.get(
+            "JOCKEY_COPILOT_EVIDENCE_DIR",
+            str(BACKEND_ROOT / ".local" / "evidence"),
+        )
+    )
+
+
+def _photo_object_key(session_id: str, step_id: str) -> str:
+    return f"sessions/{session_id}/photos/{step_id}.jpg"
 
 
 def _load_session(session_id: str) -> SessionResponse:
@@ -65,6 +92,86 @@ def _normalize_parts(parts: Any) -> list[str]:
     if not isinstance(parts, list):
         return []
     return [str(part).strip() for part in parts if str(part).strip()]
+
+
+def accept_photo_evidence(
+    *,
+    session_id: str,
+    step_id: str,
+    pending_photo: PendingPhotoReview,
+    guidance: str | None = None,
+    visible_parts: list[str] | None = None,
+) -> dict[str, Any]:
+    session = _load_session(session_id)
+    step = _session_step(session, step_id)
+    if step.kind != "photo":
+        raise HTTPException(
+            status_code=422,
+            detail="Photo evidence can only be accepted for photo steps",
+        )
+    if not pending_photo.image_bytes:
+        raise HTTPException(status_code=422, detail="Captured photo is empty")
+    if not pending_photo.mime_type.startswith("image/"):
+        raise HTTPException(status_code=415, detail="Captured evidence must be an image")
+
+    object_key = _photo_object_key(session_id, step.id)
+    destination = _evidence_root() / object_key
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(pending_photo.image_bytes)
+
+    now = _utc_now()
+    evidence_id = f"ev_{uuid4().hex[:12]}"
+    metadata: dict[str, Any] = {
+        "imageBytes": len(pending_photo.image_bytes),
+        "imageMimeType": pending_photo.mime_type,
+        "source": "saarthi-realtime-photo-review",
+        "visibleParts": visible_parts or [],
+    }
+    if pending_photo.source_uri:
+        metadata["sourceUri"] = pending_photo.source_uri
+
+    save_evidence_item(
+        evidence_id=evidence_id,
+        session_id=session_id,
+        step_id=step.id,
+        kind="photo",
+        object_key=object_key,
+        local_uri=str(destination),
+        quality_score=0.93,
+        accepted=True,
+        metadata=metadata,
+        created_at=now,
+    )
+
+    if step.id == "lhs-front-door":
+        set_step_status(session_id, step.id, "needs_observation", now)
+        updated_session = _load_session(session_id)
+        return {
+            "type": "photo_acceptance",
+            "accepted": True,
+            "evidenceId": evidence_id,
+            "completedStepId": step.id,
+            "nextStep": None,
+            "message": (
+                "I see a possible mark near the door handle. Is it a scratch, "
+                "dent, rust, or dirt?"
+            ),
+            "session": updated_session.model_dump(by_alias=True),
+        }
+
+    next_step_id = complete_step_and_activate_next(session_id, step.id, now)
+    updated_session = _load_session(session_id)
+    return {
+        "type": "photo_acceptance",
+        "accepted": True,
+        "evidenceId": evidence_id,
+        "completedStepId": step.id,
+        "nextStep": _next_step(updated_session, next_step_id),
+        "message": guidance.strip()
+        if guidance and guidance.strip()
+        else "Photo accepted. Moving to the next inspection step.",
+        "session": updated_session.model_dump(by_alias=True),
+    }
 
 
 def record_frame_intervention(
@@ -245,7 +352,7 @@ def complete_voice_inspection(session_id: str) -> dict[str, Any]:
 
 def build_voice_tools() -> ToolsSchema:
     parts_property = {
-        "description": "Visible or missing vehicle parts named by the live frame judge.",
+        "description": "Vehicle parts visible in the captured still photo.",
         "items": {"type": "string"},
         "type": "array",
     }
@@ -260,35 +367,24 @@ def build_voice_tools() -> ToolsSchema:
     return ToolsSchema(
         standard_tools=[
             FunctionSchema(
-                name="record_frame_intervention",
+                name="accept_photo",
                 description=(
-                    "Record Saarthi's live camera-frame judgment. Use status "
-                    "adjust when required parts are missing or cropped. Use "
-                    "status hold only when the photo step is framed well enough "
-                    "for the mobile app to capture."
+                    "Accept the captured still photo for the current checklist "
+                    "step. Call this only when the uploaded photo is usable. If "
+                    "a retake is needed, do not call any tool; speak the fix."
                 ),
                 properties={
                     "stepId": {
                         "description": "Current photo inspection step id.",
                         "type": "string",
                     },
-                    "status": {
-                        "description": "Frame decision: adjust or hold.",
-                        "enum": ["adjust", "hold"],
-                        "type": "string",
-                    },
                     "guidance": {
-                        "description": "Short spoken guidance for the jockey.",
+                        "description": "Short spoken acceptance guidance.",
                         "type": "string",
-                    },
-                    "confidence": {
-                        "description": "Model confidence between 0 and 1.",
-                        "type": "number",
                     },
                     "visibleParts": parts_property,
-                    "missingParts": parts_property,
                 },
-                required=["stepId", "status", "guidance"],
+                required=["stepId"],
             ),
             FunctionSchema(
                 name="record_door_observation",
@@ -320,8 +416,23 @@ def build_voice_tools() -> ToolsSchema:
 
 def build_voice_function_handlers(
     session_id: str,
+    get_pending_photo: Callable[[str], PendingPhotoReview | None] | None = None,
     on_capture_command: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    on_frame_intervention: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    on_tool_result: Callable[[str, dict[str, Any], bool], Awaitable[None]]
+    | None = None,
+    on_voice_result: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
 ):
+    async def publish_tool_result(
+        params: FunctionCallParams,
+        result: dict[str, Any],
+        *,
+        create_response: bool = True,
+    ) -> None:
+        await params.result_callback(result)
+        if on_tool_result:
+            await on_tool_result(params.tool_call_id, result, create_response)
+
     async def record_frame(params: FunctionCallParams):
         arguments = params.arguments
         result = record_frame_intervention(
@@ -337,11 +448,37 @@ def build_voice_function_handlers(
                 arguments.get("missingParts") or arguments.get("missing_parts"),
             ),
         )
-        await params.result_callback(result)
+        await publish_tool_result(params, result, create_response=False)
+
+        if on_frame_intervention:
+            await on_frame_intervention(result)
 
         capture_command = result.get("captureCommand")
         if capture_command and on_capture_command:
             await on_capture_command(capture_command)
+
+    async def accept_photo(params: FunctionCallParams):
+        arguments = params.arguments
+        step_id = str(arguments.get("stepId") or arguments.get("step_id") or "")
+        pending_photo = get_pending_photo(step_id) if get_pending_photo else None
+        if pending_photo is None:
+            raise HTTPException(
+                status_code=422,
+                detail="No captured photo is pending review for this step",
+            )
+
+        result = accept_photo_evidence(
+            session_id=session_id,
+            step_id=step_id,
+            pending_photo=pending_photo,
+            guidance=str(arguments.get("guidance") or ""),
+            visible_parts=_normalize_parts(
+                arguments.get("visibleParts") or arguments.get("visible_parts"),
+            ),
+        )
+        await publish_tool_result(params, result, create_response=False)
+        if on_voice_result:
+            await on_voice_result(result)
 
     async def record_observation(params: FunctionCallParams):
         transcript = str(params.arguments.get("transcript", "")).strip()
@@ -351,12 +488,18 @@ def build_voice_function_handlers(
             step_id=str(step_id) if step_id else None,
             transcript=transcript,
         )
-        await params.result_callback(result)
+        await publish_tool_result(params, result)
+        if on_voice_result:
+            await on_voice_result(result)
 
     async def complete_inspection(params: FunctionCallParams):
-        await params.result_callback(complete_voice_inspection(session_id))
+        result = complete_voice_inspection(session_id)
+        await publish_tool_result(params, result)
+        if on_voice_result:
+            await on_voice_result(result)
 
     return {
+        "accept_photo": accept_photo,
         "record_frame_intervention": record_frame,
         "record_door_observation": record_observation,
         "record_engine_observation": record_observation,

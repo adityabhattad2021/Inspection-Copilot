@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+import asyncio
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,13 +14,21 @@ from app.voice.realtime_bot import (
     build_inspection_control_ack,
     build_inspection_control_error,
     build_initial_realtime_messages,
+    build_realtime_photo_review_events,
     build_realtime_session_properties,
     build_realtime_text_events,
+    build_realtime_tool_result_events,
     build_voice_transport_params,
     build_voice_rtvi_observer_params,
+    decode_image_data_url,
     resolve_runner_session_id,
+    resolve_realtime_photo_transfer,
+    store_realtime_photo_transfer_chunk,
 )
 from app.voice.tools import (
+    PendingPhotoReview,
+    accept_photo_evidence,
+    build_voice_function_handlers,
     build_voice_tools,
     record_frame_intervention,
     record_voice_observation,
@@ -145,12 +154,14 @@ def test_realtime_instruction_includes_vehicle_step_language_and_guardrails():
     assert "Hindi" in instruction
     assert "2020 Hyundai Creta" in instruction
     assert "Front Main" in instruction
-    assert "camera frames" in instruction
-    assert "Use the active SYSTEM_EVENT required parts" in instruction
+    assert "captured still photo" in instruction
+    assert "CAPTURED_PHOTO_REVIEW" in instruction
     assert "For Front Main, confirm" not in instruction
-    assert "record_frame_intervention" in instruction
+    assert "accept_photo" in instruction
+    assert "do not call any tool" in instruction
+    assert "Speech alone never advances photo state" in instruction
     assert "Do not diagnose mechanical condition from audio" in instruction
-    assert "SYSTEM_GUIDANCE:" in instruction
+    assert "SYSTEM_GUIDANCE:" not in instruction
     assert "SYSTEM_EVENT:" in instruction
 
 
@@ -187,6 +198,112 @@ def test_realtime_text_events_inject_user_message_and_create_response():
     assert response_event.type == "response.create"
 
 
+def test_realtime_photo_review_events_inject_text_and_captured_image():
+    item_event, response_event = build_realtime_photo_review_events(
+        content="CAPTURED_PHOTO_REVIEW for Front Main.",
+        image_data_url="data:image/jpeg;base64,/9j/demo",
+    )
+
+    assert item_event.type == "conversation.item.create"
+    assert item_event.item.type == "message"
+    assert item_event.item.role == "user"
+    assert item_event.item.content is not None
+    assert item_event.item.content[0].type == "input_text"
+    assert item_event.item.content[0].text == "CAPTURED_PHOTO_REVIEW for Front Main."
+    assert item_event.item.content[1].type == "input_image"
+    assert item_event.item.content[1].image_url == "data:image/jpeg;base64,/9j/demo"
+    assert item_event.item.content[1].detail == "high"
+    assert response_event.type == "response.create"
+
+
+def test_realtime_photo_data_url_decodes_to_pending_review_bytes():
+    image_bytes, mime_type = decode_image_data_url(
+        "data:image/jpeg;base64,/9hwZW5kaW5nLXJldmlld//Z"
+    )
+
+    assert image_bytes == b"\xff\xd8pending-review\xff\xd9"
+    assert mime_type == "image/jpeg"
+
+
+def test_realtime_photo_transfer_chunks_reassemble_in_order_and_clear_buffer():
+    transfers = {}
+
+    store_realtime_photo_transfer_chunk(
+        transfers,
+        transfer_id="photo_123",
+        chunk_index=1,
+        chunk_count=3,
+        chunk="BBB",
+    )
+    store_realtime_photo_transfer_chunk(
+        transfers,
+        transfer_id="photo_123",
+        chunk_index=0,
+        chunk_count=3,
+        chunk="AAA",
+    )
+    store_realtime_photo_transfer_chunk(
+        transfers,
+        transfer_id="photo_123",
+        chunk_index=2,
+        chunk_count=3,
+        chunk="CCC",
+    )
+
+    assert resolve_realtime_photo_transfer(transfers, "photo_123") == "AAABBBCCC"
+    assert "photo_123" not in transfers
+
+
+def test_realtime_photo_transfer_waits_for_all_chunks_before_reassembly():
+    transfers = {}
+
+    store_realtime_photo_transfer_chunk(
+        transfers,
+        transfer_id="photo_123",
+        chunk_index=0,
+        chunk_count=2,
+        chunk="AAA",
+    )
+
+    with pytest.raises(ValueError, match="incomplete"):
+        resolve_realtime_photo_transfer(transfers, "photo_123")
+
+    assert "photo_123" in transfers
+
+
+def test_realtime_tool_result_events_return_output_and_create_response():
+    item_event, response_event = build_realtime_tool_result_events(
+        "call_frame_adjust",
+        {
+            "type": "frame_intervention",
+            "status": "adjust",
+            "message": "camera car ke front par lao",
+        },
+    )
+
+    assert item_event.type == "conversation.item.create"
+    assert item_event.item.type == "function_call_output"
+    assert item_event.item.call_id == "call_frame_adjust"
+    assert json.loads(item_event.item.output) == {
+        "type": "frame_intervention",
+        "status": "adjust",
+        "message": "camera car ke front par lao",
+    }
+    assert response_event.type == "response.create"
+
+
+def test_realtime_tool_result_events_can_skip_follow_up_response():
+    item_event, response_event = build_realtime_tool_result_events(
+        "call_frame_hold",
+        {"type": "frame_intervention", "message": "Hold steady."},
+        create_response=False,
+    )
+
+    assert item_event.type == "conversation.item.create"
+    assert item_event.item.type == "function_call_output"
+    assert response_event is None
+
+
 def test_inspection_control_ack_is_safe_for_mobile_logs():
     content = "SYSTEM_EVENT: " + ("Judge this frame. " * 30)
 
@@ -210,19 +327,19 @@ def test_voice_tools_expose_frame_observation_and_completion_functions():
     tools = build_voice_tools()
 
     assert [tool.name for tool in tools.standard_tools] == [
-        "record_frame_intervention",
+        "accept_photo",
         "record_door_observation",
         "record_engine_observation",
         "complete_inspection",
     ]
 
 
-def test_voice_transport_params_enable_realtime_camera_input():
+def test_voice_transport_params_keep_camera_feed_off_the_voice_model():
     params = build_voice_transport_params()
 
     assert params.audio_in_enabled is True
     assert params.audio_out_enabled is True
-    assert params.video_in_enabled is True
+    assert params.video_in_enabled is False
     assert params.audio_in_sample_rate == 24000
     assert params.audio_out_sample_rate == 24000
 
@@ -299,6 +416,198 @@ def test_record_frame_intervention_returns_capture_command_on_hold():
             "stepId": "front-main",
         },
     }
+
+
+def test_accept_photo_evidence_stores_pending_photo_and_advances_step(tmp_path, monkeypatch):
+    monkeypatch.setenv("JOCKEY_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    session_id = _create_started_session()
+
+    result = accept_photo_evidence(
+        session_id=session_id,
+        step_id="front-main",
+        pending_photo=PendingPhotoReview(
+            image_bytes=b"\xff\xd8accepted-photo\xff\xd9",
+            mime_type="image/jpeg",
+            source_uri="file:///cache/front-main.jpg",
+        ),
+        guidance="Photo accepted. Moving to LHS front door.",
+        visible_parts=[
+            "front bumper",
+            "bonnet line",
+            "headlight",
+            "front-left tyre",
+        ],
+    )
+
+    assert result["type"] == "photo_acceptance"
+    assert result["accepted"] is True
+    assert result["completedStepId"] == "front-main"
+    assert result["nextStep"]["id"] == "lhs-front-door"
+    assert result["session"]["plan"]["steps"][0]["status"] == "complete"
+    assert result["session"]["plan"]["steps"][1]["status"] == "active"
+
+    evidence_path = tmp_path / "evidence" / "sessions" / session_id / "photos" / "front-main.jpg"
+    assert evidence_path.read_bytes() == b"\xff\xd8accepted-photo\xff\xd9"
+
+    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+        connection.row_factory = sqlite3.Row
+        evidence = connection.execute(
+            """
+            SELECT step_id, local_uri, accepted, metadata_json
+            FROM evidence_items
+            WHERE session_id = ?
+            """,
+            (session_id,),
+        ).fetchone()
+
+    assert evidence["step_id"] == "front-main"
+    assert evidence["local_uri"] == str(evidence_path)
+    assert evidence["accepted"] == 1
+    assert json.loads(evidence["metadata_json"]) == {
+        "imageBytes": len(b"\xff\xd8accepted-photo\xff\xd9"),
+        "imageMimeType": "image/jpeg",
+        "source": "saarthi-realtime-photo-review",
+        "sourceUri": "file:///cache/front-main.jpg",
+        "visibleParts": [
+            "front bumper",
+            "bonnet line",
+            "headlight",
+            "front-left tyre",
+        ],
+    }
+
+
+def test_voice_accept_photo_handler_uses_pending_photo_and_notifies_mobile(tmp_path, monkeypatch):
+    monkeypatch.setenv("JOCKEY_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    session_id = _create_started_session()
+    sent_voice_results = []
+    sent_tool_results = []
+    tool_results = []
+
+    def get_pending_photo(step_id: str):
+        assert step_id == "front-main"
+        return PendingPhotoReview(
+            image_bytes=b"\xff\xd8voice-accepted-photo\xff\xd9",
+            mime_type="image/jpeg",
+            source_uri="file:///cache/review.jpg",
+        )
+
+    async def send_voice_result(result):
+        sent_voice_results.append(result)
+
+    async def send_tool_result(tool_call_id, result, create_response):
+        sent_tool_results.append((tool_call_id, result, create_response))
+
+    class Params:
+        tool_call_id = "call_accept_photo"
+        arguments = {
+            "stepId": "front-main",
+            "guidance": "Photo accepted. Moving to the next step.",
+            "visibleParts": ["front bumper", "front-left tyre"],
+        }
+
+        async def result_callback(self, result):
+            tool_results.append(result)
+
+    handlers = build_voice_function_handlers(
+        session_id,
+        get_pending_photo=get_pending_photo,
+        on_tool_result=send_tool_result,
+        on_voice_result=send_voice_result,
+    )
+
+    asyncio.run(handlers["accept_photo"](Params()))
+
+    assert tool_results[0]["type"] == "photo_acceptance"
+    assert tool_results[0]["nextStep"]["id"] == "lhs-front-door"
+    assert sent_voice_results == tool_results
+    assert sent_tool_results == [("call_accept_photo", tool_results[0], False)]
+
+
+def test_voice_frame_handler_notifies_mobile_for_adjust_decision():
+    session_id = _create_started_session()
+    sent_messages = []
+    sent_tool_results = []
+    tool_results = []
+
+    async def send_frame_intervention(message):
+        sent_messages.append(message)
+
+    async def send_tool_result(tool_call_id, result, create_response):
+        sent_tool_results.append((tool_call_id, result, create_response))
+
+    class Params:
+        tool_call_id = "call_frame_adjust"
+        arguments = {
+            "stepId": "front-main",
+            "status": "adjust",
+            "guidance": "Camera car front par lao.",
+            "confidence": 0.93,
+            "visibleParts": [],
+            "missingParts": ["front bumper"],
+        }
+
+        async def result_callback(self, result):
+            tool_results.append(result)
+
+    handlers = build_voice_function_handlers(
+        session_id,
+        on_frame_intervention=send_frame_intervention,
+        on_tool_result=send_tool_result,
+    )
+
+    asyncio.run(handlers["record_frame_intervention"](Params()))
+
+    assert tool_results == [
+        {
+            "type": "frame_intervention",
+            "status": "adjust",
+            "message": "Camera car front par lao.",
+            "readyToCapture": False,
+            "captureCommand": None,
+        }
+    ]
+    assert sent_messages == tool_results
+    assert sent_tool_results == [("call_frame_adjust", tool_results[0], False)]
+
+
+def test_voice_observation_handler_notifies_mobile_and_requests_response():
+    session_id = _create_started_session()
+    _capture_step(session_id, "front-main", "front-main-good")
+    _capture_step(session_id, "lhs-front-door", "lhs-door-scratch")
+    sent_voice_results = []
+    sent_tool_results = []
+    tool_results = []
+
+    async def send_voice_result(result):
+        sent_voice_results.append(result)
+
+    async def send_tool_result(tool_call_id, result, create_response):
+        sent_tool_results.append((tool_call_id, result, create_response))
+
+    class Params:
+        tool_call_id = "call_door_observation"
+        arguments = {
+            "stepId": "lhs-front-door",
+            "transcript": "Minor scratch near the handle, no dent.",
+        }
+
+        async def result_callback(self, result):
+            tool_results.append(result)
+
+    handlers = build_voice_function_handlers(
+        session_id,
+        on_tool_result=send_tool_result,
+        on_voice_result=send_voice_result,
+    )
+
+    asyncio.run(handlers["record_door_observation"](Params()))
+
+    assert tool_results[0]["type"] == "observation"
+    assert tool_results[0]["nextStep"]["id"] == "rear-main"
+    assert tool_results[0]["session"]["plan"]["steps"][1]["status"] == "complete"
+    assert sent_voice_results == tool_results
+    assert sent_tool_results == [("call_door_observation", tool_results[0], True)]
 
 
 def test_realtime_bot_resolves_session_id_from_pipecat_runner_body():

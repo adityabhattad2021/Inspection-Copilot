@@ -25,14 +25,15 @@ import {
 } from "@/src/components/ui";
 import { getInspectionStepMedia } from "@/src/data/live-inspection-media";
 import { CopilotStatusCard } from "@/src/features/inspection/copilot-status-card";
+import { logInspectionFlowEvent } from "@/src/features/inspection/inspection-debug-log";
 import { EngineGuidedCheck } from "@/src/features/inspection/engine-guided-check";
 import {
   ENGINE_TRANSCRIPT,
   findActiveInspectionStep,
+  getCapturedPhotoReviewEvent,
   getInspectionErrorMessage,
-  getInspectionStepVoiceInstruction,
+  getInspectionStepChangedEvent,
   getProgressSteps,
-  getRealtimeCameraFrameTickEvent,
   getRealtimeCameraStepStartEvent,
   getVehicleTitle,
 } from "@/src/features/inspection/inspection-flow";
@@ -67,8 +68,7 @@ type InspectionScreenProps = {
 const GREETING_WORD_REVEAL_MS = 145;
 const GREETING_FINAL_DWELL_MS = 1000;
 const CAMERA_STEP_START_DELAY_MS = 450;
-const CAMERA_FRAME_JUDGE_INTERVAL_MS = 4600;
-const CAMERA_FRAME_JUDGE_RELEASE_DELAY_MS = 900;
+const CAMERA_FRAME_JUDGE_RELEASE_DELAY_MS = 180;
 const INSPECTION_SCREEN_LOG_PREFIX = "[inspection-screen]";
 const SHOULD_LOG_INSPECTION_SCREEN_EVENTS = __DEV__;
 
@@ -101,10 +101,8 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   const [localVideoTrack, setLocalVideoTrack] = useState<MediaStreamTrack | null>(
     null,
   );
-  const [pendingCaptureStepId, setPendingCaptureStepId] = useState<string | null>(
-    null,
-  );
   const activeStepRef = useRef<InspectionStep | null>(null);
+  const agentUtteranceRef = useRef("");
   const captureFlash = useRef(new Animated.Value(0)).current;
   const greetingGateRef = useRef(createInspectionGreetingGate());
   const greetingDisplayMessageRef = useRef("");
@@ -129,6 +127,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   const isBusyRef = useRef(false);
   const isFrameJudgementInFlightRef = useRef(false);
   const isScreenMountedRef = useRef(true);
+  const lastLoggedScreenStateRef = useRef<string | null>(null);
 
   useEffect(
     () => () => {
@@ -266,8 +265,15 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         if (event.type === "agent-speaking-started") {
           isAgentSpeakingRef.current = true;
           isFrameJudgementInFlightRef.current = true;
+          agentUtteranceRef.current = "";
           clearCameraFrameJudgeReleaseTimer();
           logInspectionScreen("agent-speaking-started");
+          logInspectionFlowEvent({
+            event: "agent_speaking_started",
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
+          });
           greetingGateRef.current = recordInspectionGreetingStarted(
             greetingGateRef.current,
           );
@@ -276,16 +282,18 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         }
 
         if (event.type === "agent-message") {
-          setAgentMessage(event.text);
+          const streamedAgentMessage = normalizeWordStreamText(event.text);
+          agentUtteranceRef.current = streamedAgentMessage;
           if (greetingGateRef.current.isActive) {
-            greetingTargetMessageRef.current = normalizeWordStreamText(
-              event.text,
-            );
+            setAgentMessage(streamedAgentMessage);
+            greetingTargetMessageRef.current = streamedAgentMessage;
             scheduleGreetingWordReveal();
+          } else {
+            setAgentMessage(streamedAgentMessage);
           }
           greetingGateRef.current = recordInspectionGreetingOutput(
             greetingGateRef.current,
-            event.text,
+            streamedAgentMessage,
             Date.now(),
           );
           scheduleGreetingHandoff();
@@ -294,7 +302,26 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
         if (event.type === "agent-speaking-stopped") {
           isAgentSpeakingRef.current = false;
+          const finalAgentMessage = normalizeWordStreamText(
+            agentUtteranceRef.current,
+          ).trim();
+          if (finalAgentMessage) {
+            setAgentMessage(finalAgentMessage);
+            logInspectionFlowEvent({
+              event: "agent_message_final",
+              payload: { text: finalAgentMessage },
+              screen: "voice_runtime",
+              sessionId,
+              stepId: activeStepRef.current?.id,
+            });
+          }
           logInspectionScreen("agent-speaking-stopped");
+          logInspectionFlowEvent({
+            event: "agent_speaking_stopped",
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
+          });
           greetingGateRef.current = recordInspectionGreetingStopped(
             greetingGateRef.current,
           );
@@ -311,6 +338,16 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
             activePhases: Array.from(activeAgentProcessingPhasesRef.current),
             phase: event.phase,
           });
+          logInspectionFlowEvent({
+            event: "agent_processing_started",
+            payload: {
+              activePhases: Array.from(activeAgentProcessingPhasesRef.current),
+              phase: event.phase,
+            },
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
+          });
           return;
         }
 
@@ -319,6 +356,16 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           logInspectionScreen("agent-processing-stopped", {
             activePhases: Array.from(activeAgentProcessingPhasesRef.current),
             phase: event.phase,
+          });
+          logInspectionFlowEvent({
+            event: "agent_processing_stopped",
+            payload: {
+              activePhases: Array.from(activeAgentProcessingPhasesRef.current),
+              phase: event.phase,
+            },
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
           });
           releaseFrameJudgementWhenAgentIdle();
           return;
@@ -330,20 +377,64 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
             id: event.videoTrack?.id ?? null,
             readyState: event.videoTrack?.readyState ?? null,
           });
+          logInspectionFlowEvent({
+            event: "local_video_track",
+            payload: {
+              hasTrack: Boolean(event.videoTrack),
+              id: event.videoTrack?.id ?? null,
+              readyState: event.videoTrack?.readyState ?? null,
+            },
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
+          });
           setLocalVideoTrack(event.videoTrack);
           return;
         }
 
         if (event.type === "capture-requested") {
           logInspectionScreen("capture-requested", { stepId: event.stepId });
+          logInspectionFlowEvent({
+            event: "capture_requested",
+            payload: { requestedStepId: event.stepId },
+            screen: "voice_runtime",
+            sessionId,
+            stepId: event.stepId,
+          });
           isFrameJudgementInFlightRef.current = false;
-          setPendingCaptureStepId(event.stepId);
+          return;
+        }
+
+        if (event.type === "frame-intervention") {
+          logInspectionScreen("frame-intervention", {
+            readyToCapture: event.readyToCapture,
+            status: event.status,
+            text: event.text,
+          });
+          logInspectionFlowEvent({
+            event: "frame_intervention_received",
+            payload: {
+              readyToCapture: event.readyToCapture,
+              status: event.status,
+              text: event.text,
+            },
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
+          });
           return;
         }
 
         if (event.type === "inspection-control-ack") {
           logInspectionScreen("inspection-control-ack", {
             contentPreview: event.contentPreview,
+          });
+          logInspectionFlowEvent({
+            event: "inspection_control_ack",
+            payload: { contentPreview: event.contentPreview },
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
           });
           return;
         }
@@ -352,12 +443,48 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           logInspectionScreen("inspection-control-error", {
             error: event.error,
           });
+          logInspectionFlowEvent({
+            event: "inspection_control_error",
+            payload: { error: event.error },
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
+          });
           isFrameJudgementInFlightRef.current = false;
+          return;
+        }
+
+        if (event.type === "voice-session-updated") {
+          logInspectionScreen("voice-session-updated", {
+            message: event.message,
+            nextStepId: event.nextStep?.id ?? null,
+            resultType: event.resultType,
+          });
+          logInspectionFlowEvent({
+            event: "voice_session_updated",
+            payload: {
+              message: event.message,
+              nextStepId: event.nextStep?.id ?? null,
+              resultType: event.resultType,
+            },
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
+          });
+          setSession(event.session);
+          setObservationTranscript("");
           return;
         }
 
         if (event.type === "user-transcript") {
           logInspectionScreen("user-transcript", event.text);
+          logInspectionFlowEvent({
+            event: "user_transcript",
+            payload: { text: event.text },
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
+          });
           if (activeStepRef.current?.status === "needs_observation") {
             setObservationTranscript(event.text);
           }
@@ -366,6 +493,12 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
         if (event.type === "voice-ready") {
           logInspectionScreen("voice-ready");
+          logInspectionFlowEvent({
+            event: "voice_ready",
+            screen: "voice_runtime",
+            sessionId,
+            stepId: activeStepRef.current?.id,
+          });
         }
       }),
     [
@@ -374,6 +507,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       releaseFrameJudgementWhenAgentIdle,
       scheduleGreetingHandoff,
       scheduleGreetingWordReveal,
+      sessionId,
     ],
   );
 
@@ -382,10 +516,134 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   const currentFrame = stepMedia?.frames[frameIndex] ?? null;
   const isRealtimeCameraStep =
     activeStep?.kind === "photo" && activeStep.status !== "needs_observation";
+  const visibleScreen = useMemo(() => {
+    if (errorMessage && !session) {
+      return "inspection_unavailable";
+    }
+    if (isLoading || isGreetingActive) {
+      return "inspection_greeting";
+    }
+    if (!session) {
+      return "inspection_empty";
+    }
+    if (activeStep?.status === "needs_observation") {
+      return "needs_observation";
+    }
+    if (isRealtimeCameraStep) {
+      return "realtime_camera";
+    }
+    if (activeStep?.kind === "engine-guided") {
+      return "engine_guided";
+    }
+    return "inspection_overview";
+  }, [
+    activeStep?.kind,
+    activeStep?.status,
+    errorMessage,
+    isGreetingActive,
+    isLoading,
+    isRealtimeCameraStep,
+    session,
+  ]);
+  const screenStatePayload = useMemo(() => {
+    const completedStepCount =
+      session?.plan.steps.filter((step) => step.status === "complete").length ??
+      0;
+
+    return {
+      activeStep: activeStep
+        ? {
+            fieldName: activeStep.fieldName,
+            id: activeStep.id,
+            instructions: activeStep.instructions,
+            kind: activeStep.kind,
+            section: activeStep.section,
+            status: activeStep.status,
+          }
+        : null,
+      analysis: analysis
+        ? {
+            confidence: analysis.confidence,
+            guidance: analysis.guidance,
+            readyToCapture: analysis.readyToCapture,
+            status: analysis.status,
+          }
+        : null,
+      errorMessage,
+      frame: currentFrame
+        ? {
+            key: currentFrame.key,
+            label: currentFrame.label,
+          }
+        : null,
+      frameIndex,
+      hasLocalVideoTrack: Boolean(localVideoTrack),
+      isBusy,
+      isComplete,
+      isGreetingActive,
+      isLoading,
+      progress: session
+        ? {
+            completedStepCount,
+            totalStepCount: session.plan.steps.length,
+          }
+        : null,
+      screen: visibleScreen,
+      showingMessage:
+        visibleScreen === "inspection_greeting"
+          ? "Inspection greeting"
+          : agentMessage || null,
+      vehicle: session
+        ? {
+            registrationNumber: session.vehicle.registrationNumber,
+            title: getVehicleTitle(session),
+          }
+        : null,
+    };
+  }, [
+    activeStep,
+    agentMessage,
+    analysis,
+    currentFrame,
+    errorMessage,
+    frameIndex,
+    isBusy,
+    isComplete,
+    isGreetingActive,
+    isLoading,
+    localVideoTrack,
+    session,
+    visibleScreen,
+  ]);
+  const screenStateKey = useMemo(
+    () => JSON.stringify(screenStatePayload),
+    [screenStatePayload],
+  );
 
   useEffect(() => {
     activeStepRef.current = activeStep;
   }, [activeStep]);
+
+  useEffect(() => {
+    if (lastLoggedScreenStateRef.current === screenStateKey) {
+      return;
+    }
+
+    lastLoggedScreenStateRef.current = screenStateKey;
+    logInspectionFlowEvent({
+      event: "screen_state",
+      payload: screenStatePayload,
+      screen: visibleScreen,
+      sessionId,
+      stepId: activeStep?.id,
+    });
+  }, [
+    activeStep?.id,
+    screenStateKey,
+    screenStatePayload,
+    sessionId,
+    visibleScreen,
+  ]);
 
   useEffect(() => {
     isBusyRef.current = isBusy;
@@ -396,19 +654,29 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
     async function startInspection() {
       if (!sessionId) {
+        logInspectionFlowEvent({
+          event: "inspection_start_failed",
+          payload: { reason: "missing_session_id" },
+          screen: "inspection_start",
+        });
         setErrorMessage("Missing inspection session id.");
         setIsLoading(false);
         return;
       }
 
+      logInspectionFlowEvent({
+        event: "inspection_start_requested",
+        screen: "inspection_start",
+        sessionId,
+      });
       setIsLoading(true);
       setAgentMessage("");
+      agentUtteranceRef.current = "";
       greetingTargetMessageRef.current = "";
       updateGreetingDisplayMessage("");
       setErrorMessage(null);
       setLocalVideoTrack(null);
       setObservationTranscript("");
-      setPendingCaptureStepId(null);
       clearGreetingFinishTimer();
       clearGreetingWordTimer();
       clearCameraFrameJudgeTimer();
@@ -422,6 +690,18 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           getCachedProfile().catch(() => null),
           getVoiceConfig(),
         ]);
+        logInspectionFlowEvent({
+          event: "voice_config_loaded",
+          payload: {
+            isReady: voiceConfig.ready,
+            languageCode: jockeyProfile?.languageCode ?? null,
+            missing: voiceConfig.missing,
+            provider: voiceConfig.provider,
+            transport: voiceConfig.transport,
+          },
+          screen: "inspection_start",
+          sessionId,
+        });
         if (!voiceConfig.ready) {
           const missing = voiceConfig.missing.join(", ");
           throw new Error(
@@ -444,10 +724,34 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         if (mounted) {
           setSession(startedSession.session);
         }
+        logInspectionFlowEvent({
+          event: "inspection_session_started",
+          payload: {
+            activeStep: startedSession.activeStep
+              ? {
+                  fieldName: startedSession.activeStep.fieldName,
+                  id: startedSession.activeStep.id,
+                  kind: startedSession.activeStep.kind,
+                  status: startedSession.activeStep.status,
+                }
+              : null,
+            agentMessage: startedSession.agentMessage,
+            sessionStatus: startedSession.session.status,
+          },
+          screen: "inspection_start",
+          sessionId,
+          stepId: startedSession.activeStep?.id,
+        });
       } catch (error) {
         if (mounted) {
           setErrorMessage(getInspectionErrorMessage(error));
         }
+        logInspectionFlowEvent({
+          event: "inspection_start_failed",
+          payload: { error: getInspectionErrorMessage(error) },
+          screen: "inspection_start",
+          sessionId,
+        });
       } finally {
         if (mounted) {
           setIsLoading(false);
@@ -486,14 +790,8 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       return;
     }
     setObservationTranscript("");
-    if (activeStep?.kind === "photo") {
-      setAgentMessage(activeStep.instructions);
-    }
   }, [
-    activeStep?.id,
-    activeStep?.instructions,
-    activeStep?.kind,
-    activeStep?.status,
+    activeStep,
     clearCameraFrameJudgeTimer,
     resetFrameJudgementGate,
     stepMedia?.observationTranscript,
@@ -533,6 +831,16 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           hasVideoTrack: Boolean(localVideoTrack),
           stepId: activeStep.id,
         });
+        logInspectionFlowEvent({
+          event: "camera_start_waiting",
+          payload: {
+            blockers,
+            hasVideoTrack: Boolean(localVideoTrack),
+          },
+          screen: "realtime_camera",
+          sessionId,
+          stepId: activeStep.id,
+        });
       }
       return;
     }
@@ -554,6 +862,16 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         hasVideoTrack: Boolean(localVideoTrack),
         stepId: activeStep.id,
       });
+      logInspectionFlowEvent({
+        event: "camera_start_instruction_sent",
+        payload: {
+          content: startEvent,
+          hasVideoTrack: Boolean(localVideoTrack),
+        },
+        screen: "realtime_camera",
+        sessionId,
+        stepId: activeStep.id,
+      });
       isFrameJudgementInFlightRef.current = true;
       clearCameraFrameJudgeReleaseTimer();
       void voiceDriver.sendControlEvent(startEvent).catch((error) => {
@@ -563,6 +881,13 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           "camera-start:error",
           getInspectionErrorMessage(error),
         );
+        logInspectionFlowEvent({
+          event: "camera_start_instruction_failed",
+          payload: { error: getInspectionErrorMessage(error) },
+          screen: "realtime_camera",
+          sessionId,
+          stepId: activeStep.id,
+        });
         setErrorMessage(getInspectionErrorMessage(error));
       });
     }, CAMERA_STEP_START_DELAY_MS);
@@ -578,84 +903,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     isRealtimeCameraStep,
     localVideoTrack,
     session,
-    voiceDriver,
-  ]);
-
-  useEffect(() => {
-    clearCameraFrameJudgeTimer();
-
-    const blockers: string[] = [];
-    if (isLoading) {
-      blockers.push("loading");
-    }
-    if (isGreetingActive) {
-      blockers.push("greeting_active");
-    }
-    if (!activeStep) {
-      blockers.push("no_active_step");
-    }
-    if (!isRealtimeCameraStep) {
-      blockers.push("not_realtime_camera_step");
-    }
-    if (activeStep?.status === "needs_observation") {
-      blockers.push("needs_observation");
-    }
-    if (!localVideoTrack) {
-      blockers.push("no_local_video_track");
-    }
-
-    if (blockers.length > 0) {
-      return;
-    }
-    if (!activeStep) {
-      return;
-    }
-
-    logInspectionScreen("camera-frame-tick:interval-started", {
-      stepId: activeStep.id,
-    });
-    cameraFrameJudgeTimerRef.current = setInterval(() => {
-      const activePhases = Array.from(activeAgentProcessingPhasesRef.current);
-      if (
-        isAgentSpeakingRef.current ||
-        isBusyRef.current ||
-        isFrameJudgementInFlightRef.current ||
-        activePhases.length > 0
-      ) {
-        logInspectionScreen("camera-frame-tick:skipped", {
-          activePhases,
-          isAgentSpeaking: isAgentSpeakingRef.current,
-          isBusy: isBusyRef.current,
-          isFrameJudgementInFlight: isFrameJudgementInFlightRef.current,
-          stepId: activeStep.id,
-        });
-        return;
-      }
-
-      logInspectionScreen("camera-frame-tick:send", { stepId: activeStep.id });
-      isFrameJudgementInFlightRef.current = true;
-      clearCameraFrameJudgeReleaseTimer();
-      void voiceDriver
-        .sendControlEvent(getRealtimeCameraFrameTickEvent(activeStep))
-        .catch((error) => {
-          isFrameJudgementInFlightRef.current = false;
-          logInspectionScreen(
-            "camera-frame-tick:error",
-            getInspectionErrorMessage(error),
-          );
-          setErrorMessage(getInspectionErrorMessage(error));
-        });
-    }, CAMERA_FRAME_JUDGE_INTERVAL_MS);
-
-    return clearCameraFrameJudgeTimer;
-  }, [
-    activeStep,
-    clearCameraFrameJudgeTimer,
-    clearCameraFrameJudgeReleaseTimer,
-    isGreetingActive,
-    isLoading,
-    isRealtimeCameraStep,
-    localVideoTrack,
+    sessionId,
     voiceDriver,
   ]);
 
@@ -666,7 +914,6 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       !session ||
       !activeStep ||
       isRealtimeCameraStep ||
-      activeStep.status === "needs_observation" ||
       initialStepInstructionSentRef.current
     ) {
       return;
@@ -676,20 +923,66 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     const activeStepIndex = session.plan.steps.findIndex(
       (step) => step.id === activeStep.id,
     );
-    const instruction = getInspectionStepVoiceInstruction(
+    const stepEvent = getInspectionStepChangedEvent(
       activeStep,
       Math.max(0, activeStepIndex),
     );
-    setAgentMessage(instruction);
-    void voiceDriver.sendAgentMessage(instruction).catch((error) => {
-      setErrorMessage(getInspectionErrorMessage(error));
-    });
+
+    let isCancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const sendStepEventWhenAgentIdle = () => {
+      if (isCancelled) {
+        return;
+      }
+
+      if (
+        isAgentSpeakingRef.current ||
+        activeAgentProcessingPhasesRef.current.size > 0
+      ) {
+        retryTimer = setTimeout(sendStepEventWhenAgentIdle, 180);
+        return;
+      }
+
+      logInspectionFlowEvent({
+        event: "step_changed_sent",
+        payload: { content: stepEvent },
+        screen: visibleScreen,
+        sessionId,
+        stepId: activeStep.id,
+      });
+      void voiceDriver.sendControlEvent(stepEvent).catch((error) => {
+        initialStepInstructionSentRef.current = false;
+        logInspectionFlowEvent({
+          event: "step_changed_failed",
+          payload: {
+            content: stepEvent,
+            error: getInspectionErrorMessage(error),
+          },
+          screen: visibleScreen,
+          sessionId,
+          stepId: activeStep.id,
+        });
+        setErrorMessage(getInspectionErrorMessage(error));
+      });
+    };
+
+    retryTimer = setTimeout(sendStepEventWhenAgentIdle, 120);
+
+    return () => {
+      isCancelled = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+    };
   }, [
     activeStep,
     isGreetingActive,
     isLoading,
     isRealtimeCameraStep,
     session,
+    sessionId,
+    visibleScreen,
     voiceDriver,
   ]);
 
@@ -700,6 +993,16 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
     setIsBusy(true);
     setErrorMessage(null);
+    logInspectionFlowEvent({
+      event: "sample_frame_analysis_requested",
+      payload: {
+        frameKey: currentFrame.key,
+        stepFieldName: activeStep.fieldName,
+      },
+      screen: visibleScreen,
+      sessionId,
+      stepId: activeStep.id,
+    });
 
     try {
       const result = await analyzeLiveFrame({
@@ -708,8 +1011,16 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         stepId: activeStep.id,
       });
       setAnalysis(result);
-      setAgentMessage(result.guidance);
-      await voiceDriver.sendAgentMessage(result.guidance);
+      logInspectionFlowEvent({
+        event: "sample_frame_analysis_received",
+        payload: {
+          frameKey: currentFrame.key,
+          result,
+        },
+        screen: visibleScreen,
+        sessionId,
+        stepId: activeStep.id,
+      });
 
       if (result.readyToCapture) {
         setTimeout(() => {
@@ -719,6 +1030,16 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         setIsBusy(false);
       }
     } catch (error) {
+      logInspectionFlowEvent({
+        event: "sample_frame_analysis_failed",
+        payload: {
+          error: getInspectionErrorMessage(error),
+          frameKey: currentFrame.key,
+        },
+        screen: visibleScreen,
+        sessionId,
+        stepId: activeStep.id,
+      });
       setErrorMessage(getInspectionErrorMessage(error));
       setIsBusy(false);
     }
@@ -741,6 +1062,13 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
   async function handleAutoCapture(step: InspectionStep, sampleKey: string) {
     playCaptureFlash();
+    logInspectionFlowEvent({
+      event: "sample_auto_capture_started",
+      payload: { sampleKey },
+      screen: visibleScreen,
+      sessionId,
+      stepId: step.id,
+    });
 
     try {
       const evidence = await savePhotoEvidence({
@@ -750,9 +1078,31 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         stepId: step.id,
       });
       setSession(evidence.session);
-      setAgentMessage(evidence.agentMessage);
-      await voiceDriver.sendAgentMessage(evidence.agentMessage);
+      logInspectionFlowEvent({
+        event: "photo_evidence_saved",
+        payload: {
+          accepted: evidence.accepted,
+          agentMessage: evidence.agentMessage,
+          completedStepId: evidence.completedStepId,
+          evidenceId: evidence.evidenceId,
+          nextStepId: evidence.nextStep?.id ?? null,
+          sampleKey,
+        },
+        screen: visibleScreen,
+        sessionId,
+        stepId: step.id,
+      });
     } catch (error) {
+      logInspectionFlowEvent({
+        event: "photo_evidence_save_failed",
+        payload: {
+          error: getInspectionErrorMessage(error),
+          sampleKey,
+        },
+        screen: visibleScreen,
+        sessionId,
+        stepId: step.id,
+      });
       setErrorMessage(getInspectionErrorMessage(error));
     } finally {
       setAnalysis(null);
@@ -764,13 +1114,38 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     async (stepId: string) => {
       const step = activeStepRef.current;
       if (!step || step.id !== stepId || isBusyRef.current) {
+        logInspectionFlowEvent({
+          event: "realtime_capture_ignored",
+          payload: {
+            activeStepId: step?.id ?? null,
+            isBusy: isBusyRef.current,
+            requestedStepId: stepId,
+          },
+          screen: "realtime_camera",
+          sessionId,
+          stepId,
+        });
         return;
       }
       if (!localVideoTrack) {
+        logInspectionFlowEvent({
+          event: "realtime_capture_failed",
+          payload: { error: "Realtime camera track is not ready." },
+          screen: "realtime_camera",
+          sessionId,
+          stepId,
+        });
         setErrorMessage("Realtime camera track is not ready.");
         return;
       }
       if (realtimeVideoViewTagRef.current === null) {
+        logInspectionFlowEvent({
+          event: "realtime_capture_failed",
+          payload: { error: "Realtime camera view is not ready." },
+          screen: "realtime_camera",
+          sessionId,
+          stepId,
+        });
         setErrorMessage("Realtime camera view is not ready.");
         return;
       }
@@ -778,16 +1153,15 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       isBusyRef.current = true;
       setIsBusy(true);
       setErrorMessage(null);
-
-      await new Promise((resolve) => {
-        setTimeout(resolve, step.autoCapture?.holdMs ?? 900);
+      logInspectionFlowEvent({
+        event: "realtime_capture_started",
+        payload: {
+          viewTag: realtimeVideoViewTagRef.current,
+        },
+        screen: "realtime_camera",
+        sessionId,
+        stepId,
       });
-
-      if (activeStepRef.current?.id !== stepId) {
-        isBusyRef.current = false;
-        setIsBusy(false);
-        return;
-      }
 
       playCaptureFlash();
 
@@ -802,23 +1176,65 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           uri: capture.uri,
           width: capture.width,
         });
-
-        const evidence = await savePhotoEvidence({
-          image: {
-            name: `${stepId}.jpg`,
-            type: capture.mimeType,
+        logInspectionFlowEvent({
+          event: "realtime_frame_stored",
+          payload: {
+            bytes: capture.bytes,
+            height: capture.height,
+            mimeType: capture.mimeType,
             uri: capture.uri,
+            width: capture.width,
           },
-          localUri: capture.uri,
-          sampleKey: `${stepId}-realtime`,
+          screen: "realtime_camera",
           sessionId,
-          stepId: step.id,
+          stepId,
         });
-        setSession(evidence.session);
-        setAgentMessage(evidence.agentMessage);
-        await voiceDriver.sendAgentMessage(evidence.agentMessage);
+
+        if (activeStepRef.current?.id !== stepId) {
+          logInspectionFlowEvent({
+            event: "realtime_capture_cancelled",
+            payload: {
+              activeStepId: activeStepRef.current?.id ?? null,
+              requestedStepId: stepId,
+            },
+            screen: "realtime_camera",
+            sessionId,
+            stepId,
+          });
+          return;
+        }
+
+        const reviewEvent = getCapturedPhotoReviewEvent(step);
+        setAgentMessage("Reviewing captured photo...");
+        isFrameJudgementInFlightRef.current = true;
+        clearCameraFrameJudgeReleaseTimer();
+        await voiceDriver.sendControlEvent(reviewEvent, {
+          imageDataUrl: capture.dataUrl,
+          sourceUri: capture.uri,
+          stepId,
+        });
+        logInspectionFlowEvent({
+          event: "captured_photo_review_sent",
+          payload: {
+            bytes: capture.bytes,
+            content: reviewEvent,
+            height: capture.height,
+            localUri: capture.uri,
+            width: capture.width,
+          },
+          screen: "realtime_camera",
+          sessionId,
+          stepId,
+        });
       } catch (error) {
         logInspectionScreen("capture-frame:error", getInspectionErrorMessage(error));
+        logInspectionFlowEvent({
+          event: "realtime_capture_failed",
+          payload: { error: getInspectionErrorMessage(error) },
+          screen: "realtime_camera",
+          sessionId,
+          stepId,
+        });
         setErrorMessage(getInspectionErrorMessage(error));
       } finally {
         setAnalysis(null);
@@ -826,26 +1242,29 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         isBusyRef.current = false;
       }
     },
-    [localVideoTrack, playCaptureFlash, sessionId, voiceDriver],
+    [
+      clearCameraFrameJudgeReleaseTimer,
+      localVideoTrack,
+      playCaptureFlash,
+      sessionId,
+      voiceDriver,
+    ],
   );
 
   const handleRealtimeVideoViewReady = useCallback(
     (viewTag: number | null) => {
       realtimeVideoViewTagRef.current = viewTag;
       logInspectionScreen("camera-view-ready", { viewTag });
+      logInspectionFlowEvent({
+        event: "camera_view_ready",
+        payload: { viewTag },
+        screen: "realtime_camera",
+        sessionId,
+        stepId: activeStepRef.current?.id,
+      });
     },
-    [],
+    [sessionId],
   );
-
-  useEffect(() => {
-    if (!pendingCaptureStepId) {
-      return;
-    }
-
-    const stepId = pendingCaptureStepId;
-    setPendingCaptureStepId(null);
-    void handleRealtimeCapture(stepId);
-  }, [handleRealtimeCapture, pendingCaptureStepId]);
 
   function handleUseNextFrame() {
     if (!stepMedia) {
@@ -853,9 +1272,30 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     }
 
     setAnalysis(null);
+    logInspectionFlowEvent({
+      event: "sample_frame_advanced",
+      payload: {
+        fromFrameIndex: frameIndex,
+        toFrameIndex: Math.min(frameIndex + 1, stepMedia.frames.length - 1),
+      },
+      screen: visibleScreen,
+      sessionId,
+      stepId: activeStep?.id,
+    });
     setFrameIndex((current) =>
       Math.min(current + 1, stepMedia.frames.length - 1),
     );
+  }
+
+  function handleSelectObservationTranscript(transcript: string) {
+    setObservationTranscript(transcript);
+    logInspectionFlowEvent({
+      event: "observation_transcript_selected",
+      payload: { transcript },
+      screen: "needs_observation",
+      sessionId,
+      stepId: activeStep?.id,
+    });
   }
 
   async function handleObservationAnswer() {
@@ -866,6 +1306,13 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
     setIsBusy(true);
     setErrorMessage(null);
+    logInspectionFlowEvent({
+      event: "observation_submitted",
+      payload: { transcript },
+      screen: "needs_observation",
+      sessionId,
+      stepId: activeStep.id,
+    });
 
     try {
       const observation = await structureObservation({
@@ -874,10 +1321,31 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         transcript,
       });
       setSession(observation.session);
-      setAgentMessage(observation.summary);
       setObservationTranscript("");
-      await voiceDriver.sendAgentMessage(observation.summary);
+      logInspectionFlowEvent({
+        event: "observation_structured",
+        payload: {
+          nextStepId: observation.nextStep?.id ?? null,
+          observationId: observation.observationId,
+          structuredFields: observation.structuredFields,
+          summary: observation.summary,
+          transcript,
+        },
+        screen: "needs_observation",
+        sessionId,
+        stepId: activeStep.id,
+      });
     } catch (error) {
+      logInspectionFlowEvent({
+        event: "observation_structure_failed",
+        payload: {
+          error: getInspectionErrorMessage(error),
+          transcript,
+        },
+        screen: "needs_observation",
+        sessionId,
+        stepId: activeStep.id,
+      });
       setErrorMessage(getInspectionErrorMessage(error));
     } finally {
       setIsBusy(false);
@@ -891,6 +1359,16 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
     setIsBusy(true);
     setErrorMessage(null);
+    logInspectionFlowEvent({
+      event: "engine_answer_submitted",
+      payload: {
+        phase: "final",
+        transcript: ENGINE_TRANSCRIPT,
+      },
+      screen: "engine_guided",
+      sessionId,
+      stepId: activeStep.id,
+    });
 
     try {
       const engine = await runEngineCheck({
@@ -902,17 +1380,56 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       if (engine.session) {
         setSession(engine.session);
       }
-      setAgentMessage(engine.agentMessage);
-      await voiceDriver.sendAgentMessage(engine.agentMessage);
+      logInspectionFlowEvent({
+        event: "engine_answer_structured",
+        payload: {
+          agentMessage: engine.agentMessage,
+          isComplete: engine.isComplete,
+          nextPhase: engine.nextPhase,
+          phase: engine.phase,
+          questions: engine.questions,
+          structuredFields: engine.structuredFields,
+          transcript: ENGINE_TRANSCRIPT,
+        },
+        screen: "engine_guided",
+        sessionId,
+        stepId: activeStep.id,
+      });
 
       const completed = await completeInspectionSession(sessionId);
-      setAgentMessage(completed.agentMessage);
-      await voiceDriver.sendAgentMessage(completed.agentMessage);
+      logInspectionFlowEvent({
+        event: "inspection_completed",
+        payload: {
+          agentMessage: completed.agentMessage,
+          completedStepCount: completed.completedStepCount,
+          status: completed.status,
+        },
+        screen: "engine_guided",
+        sessionId,
+        stepId: activeStep.id,
+      });
+      await voiceDriver.sendControlEvent(
+        [
+          "INSPECTION_COMPLETED.",
+          `Status: ${completed.status}.`,
+          `Completed steps: ${completed.completedStepCount}.`,
+          `Engine transcript: ${ENGINE_TRANSCRIPT}`,
+          `Engine structured fields: ${JSON.stringify(engine.structuredFields)}.`,
+          "Thank the jockey in your own short words.",
+        ].join(" "),
+      );
       setIsComplete(true);
       setTimeout(() => {
         router.replace("/" as never);
       }, 1400);
     } catch (error) {
+      logInspectionFlowEvent({
+        event: "engine_or_completion_failed",
+        payload: { error: getInspectionErrorMessage(error) },
+        screen: "engine_guided",
+        sessionId,
+        stepId: activeStep.id,
+      });
       setErrorMessage(getInspectionErrorMessage(error));
     } finally {
       setIsBusy(false);
@@ -944,9 +1461,9 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         errorMessage={errorMessage}
         frame={currentFrame}
         isBusy={isBusy}
-        message={agentMessage || activeStep.instructions}
+        message={agentMessage}
         onConfirm={handleObservationAnswer}
-        onSelectTranscript={setObservationTranscript}
+        onSelectTranscript={handleSelectObservationTranscript}
         progressSteps={progressSteps}
         registrationNumber={session.vehicle.registrationNumber}
         step={activeStep}
@@ -967,7 +1484,11 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         bottomInset={insets.bottom}
         captureFlash={captureFlash}
         errorMessage={errorMessage}
-        instruction={agentMessage || activeStep.instructions}
+        instruction={agentMessage}
+        isBusy={isBusy}
+        onCapturePhoto={() => {
+          void handleRealtimeCapture(activeStep.id);
+        }}
         onVideoViewReady={handleRealtimeVideoViewReady}
         stepNumber={Math.max(0, activeStepIndex) + 1}
         stepTitle={activeStep.fieldName}

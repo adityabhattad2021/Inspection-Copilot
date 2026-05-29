@@ -5,6 +5,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
 import android.view.PixelCopy;
 import android.view.SurfaceView;
 import android.view.View;
@@ -226,11 +227,14 @@ public class RealtimeFrameCaptureModule extends ReactContextBaseJavaModule {
             outputStream.write(encodedImage.bytes);
         }
 
+        String dataUrl = "data:" + IMAGE_MIME_TYPE + ";base64,"
+                + Base64.encodeToString(encodedImage.bytes, Base64.NO_WRAP);
         return new CaptureResult(
                 outputFile,
                 encodedImage.width,
                 encodedImage.height,
-                encodedImage.bytes.length);
+                encodedImage.bytes.length,
+                dataUrl);
     }
 
     private void resolveCapture(Promise promise, CaptureResult result) {
@@ -238,6 +242,7 @@ public class RealtimeFrameCaptureModule extends ReactContextBaseJavaModule {
         payload.putString("uri", Uri.fromFile(result.file).toString());
         payload.putString("path", result.file.getAbsolutePath());
         payload.putString("mimeType", IMAGE_MIME_TYPE);
+        payload.putString("dataUrl", result.dataUrl);
         payload.putInt("width", result.width);
         payload.putInt("height", result.height);
         payload.putInt("bytes", result.bytes);
@@ -261,12 +266,14 @@ public class RealtimeFrameCaptureModule extends ReactContextBaseJavaModule {
         final int width;
         final int height;
         final int bytes;
+        final String dataUrl;
 
-        CaptureResult(File file, int width, int height, int bytes) {
+        CaptureResult(File file, int width, int height, int bytes, String dataUrl) {
             this.file = file;
             this.width = width;
             this.height = height;
             this.bytes = bytes;
+            this.dataUrl = dataUrl;
         }
     }
 }
