@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.database import (
@@ -25,6 +26,7 @@ from app.services.report_generator import (
     render_report_html,
     report_metadata,
 )
+from app.storage.s3_store import create_presigned_download_url, get_s3_bucket
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -241,16 +243,55 @@ def get_report(session_id: str) -> dict[str, Any]:
 
 
 @router.get("/{session_id}/report.html", response_class=HTMLResponse)
-def get_report_html(session_id: str) -> HTMLResponse:
+def get_report_html(session_id: str, view: bool = False) -> HTMLResponse:
     payload = _load_report_or_404(session_id)
+    headers = {}
+    if not view:
+        headers["Content-Disposition"] = (
+            f'attachment; filename="inspection-report-{session_id}.html"'
+        )
     return HTMLResponse(
         content=render_report_html(payload["reportJson"]),
-        headers={
-            "Content-Disposition": (
-                f'attachment; filename="inspection-report-{session_id}.html"'
-            )
-        },
+        headers=headers,
     )
+
+
+@router.get("/{session_id}/evidence/{evidence_id}")
+def get_evidence_image(session_id: str, evidence_id: str):
+    evidence = next(
+        (
+            item
+            for item in list_evidence_items(session_id)
+            if item["id"] == evidence_id and item["kind"] == "photo"
+        ),
+        None,
+    )
+    if evidence is None:
+        raise HTTPException(status_code=404, detail="Photo evidence not found")
+
+    metadata = evidence.get("metadata", {})
+    media_type = metadata.get("imageMimeType") or "image/jpeg"
+    local_uri = evidence.get("localUri")
+    if local_uri:
+        if local_uri.startswith(("http://", "https://")):
+            return RedirectResponse(local_uri)
+        local_path = Path(local_uri)
+        if local_path.is_file():
+            return FileResponse(local_path, media_type=media_type)
+
+    object_key = evidence.get("objectKey")
+    if object_key:
+        try:
+            return RedirectResponse(
+                create_presigned_download_url(
+                    bucket=get_s3_bucket(),
+                    object_key=object_key,
+                )
+            )
+        except RuntimeError:
+            pass
+
+    raise HTTPException(status_code=404, detail="Photo evidence file not found")
 
 
 @router.get("/{session_id}", response_model=SessionResponse)

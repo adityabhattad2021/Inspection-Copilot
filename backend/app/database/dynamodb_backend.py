@@ -616,6 +616,30 @@ def load_report_payload(session_id: str) -> dict[str, Any] | None:
     }
 
 
+def list_report_payloads() -> list[dict[str, Any]]:
+    reports = [_from_dynamodb(item) for item in _scan_by_entity("report")]
+    payloads = [
+        {
+            "reportId": item["reportId"],
+            "sessionId": item["sessionId"],
+            "status": item["status"],
+            "completionScore": item["completionScore"],
+            "mediaQualityScore": item["mediaQualityScore"],
+            "pricingRisk": item["pricingRisk"],
+            "reportJson": item["reportJson"],
+            "reportHtmlPath": item["reportHtmlPath"],
+            "createdAt": item["createdAt"],
+            "updatedAt": item["updatedAt"],
+        }
+        for item in reports
+    ]
+    return sorted(
+        payloads,
+        key=lambda payload: (payload["createdAt"], payload["reportId"]),
+        reverse=True,
+    )
+
+
 def save_profile_payload(payload: dict[str, Any]) -> None:
     _put_item(
         {

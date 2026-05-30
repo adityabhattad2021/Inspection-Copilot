@@ -19,6 +19,18 @@ export const API_BASE_URL =
     : (normalizeBaseUrl(process.env.EXPO_PUBLIC_RELEASE_API_BASE_URL) ??
       PRODUCTION_API_BASE_URL);
 
+export function buildApiUrl(pathOrUrl: string): string {
+  if (/^https?:\/\//i.test(pathOrUrl)) {
+    return pathOrUrl;
+  }
+
+  const normalizedPath = pathOrUrl.startsWith("/")
+    ? pathOrUrl
+    : `/${pathOrUrl}`;
+
+  return `${API_BASE_URL}${normalizedPath}`;
+}
+
 type ApiErrorCode = "HTTP_ERROR" | "NETWORK_ERROR" | "INVALID_RESPONSE";
 
 export class ApiError extends Error {
@@ -132,11 +144,26 @@ export type EngineCheckResponse = {
   session: InspectionSession | null;
 };
 
+export type InspectionReportMetadata = {
+  reportId: string;
+  sessionId: string;
+  status: string;
+  completionScore: number;
+  mediaQualityScore: number;
+  pricingRisk: string;
+  reportJsonUrl: string;
+  reportHtmlUrl: string;
+  downloadUrl: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CompleteInspectionSessionResponse = {
   sessionId: string;
   status: string;
   completedStepCount: number;
   agentMessage: string;
+  report: InspectionReportMetadata;
 };
 
 export type VoiceRuntimeConfig = {

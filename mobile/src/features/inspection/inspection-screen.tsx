@@ -55,7 +55,6 @@ import { InspectionStepCard } from "@/src/features/inspection/inspection-step-ca
 import { NeedsObservationScreen } from "@/src/features/inspection/needs-observation-screen";
 import { createInspectionVoiceDriver } from "@/src/features/inspection/pipecat-voice-boundary";
 import type { AgentProcessingPhase } from "@/src/features/inspection/pipecat-voice-boundary";
-import { captureRealtimeFrame } from "@/src/features/inspection/realtime-frame-capture";
 import { RealtimeCameraScreen } from "@/src/features/inspection/realtime-camera-screen";
 import {
   getNextWordStreamText,
@@ -64,6 +63,7 @@ import {
 } from "@/src/features/inspection/word-stream";
 import { LiveGuidanceCard } from "@/src/features/inspection/live-guidance-card";
 import { getCachedProfile } from "@/src/features/onboarding/profile-storage";
+import { saveInspectionReport } from "@/src/features/reports/report-storage";
 
 type InspectionScreenProps = {
   sessionId: string;
@@ -1117,6 +1117,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     hasRequestedInspectionCompletionRef.current = true;
     let isCancelled = false;
     const completionStepId = activeStepRef.current?.id;
+    const reportSession = session;
 
     async function finishReadyInspection() {
       setIsBusy(true);
@@ -1130,6 +1131,21 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
       try {
         const completed = await completeInspectionSession(sessionId);
+        const jockeyProfile = await getCachedProfile().catch(() => null);
+        await saveInspectionReport({
+          createdByName: jockeyProfile?.jockeyName,
+          createdByProfileId: jockeyProfile?.profileId,
+          report: completed.report,
+          vehicle: reportSession.vehicle,
+        }).catch((error) => {
+          logInspectionFlowEvent({
+            event: "inspection_report_cache_failed",
+            payload: { error: getInspectionErrorMessage(error) },
+            screen: visibleScreen,
+            sessionId,
+            stepId: completionStepId,
+          });
+        });
         logInspectionFlowEvent({
           event: "inspection_completed",
           payload: {
@@ -1166,7 +1182,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         clearCompletionRedirectTimer();
         completionRedirectTimerRef.current = setTimeout(() => {
           completionRedirectTimerRef.current = null;
-          router.replace("/" as never);
+          router.replace(`/reports?sessionId=${sessionId}` as never);
         }, COMPLETION_NAVIGATION_DWELL_MS);
       } catch (error) {
         logInspectionFlowEvent({
@@ -1356,26 +1372,12 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         setErrorMessage("Realtime camera track is not ready.");
         return;
       }
-      if (realtimeVideoViewTagRef.current === null) {
-        logInspectionFlowEvent({
-          event: "realtime_capture_failed",
-          payload: { error: "Realtime camera view is not ready." },
-          screen: "realtime_camera",
-          sessionId,
-          stepId,
-        });
-        setErrorMessage("Realtime camera view is not ready.");
-        return;
-      }
-
       isBusyRef.current = true;
       setIsBusy(true);
       setErrorMessage(null);
       logInspectionFlowEvent({
         event: "realtime_capture_started",
-        payload: {
-          viewTag: realtimeVideoViewTagRef.current,
-        },
+        payload: { source: "pipecat-camera-frame" },
         screen: "realtime_camera",
         sessionId,
         stepId,
@@ -1384,30 +1386,6 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       playCaptureFlash();
 
       try {
-        logInspectionScreen("capture-frame:start", {
-          viewTag: realtimeVideoViewTagRef.current,
-        });
-        const capture = await captureRealtimeFrame(realtimeVideoViewTagRef.current);
-        logInspectionScreen("capture-frame-stored", {
-          bytes: capture.bytes,
-          height: capture.height,
-          uri: capture.uri,
-          width: capture.width,
-        });
-        logInspectionFlowEvent({
-          event: "realtime_frame_stored",
-          payload: {
-            bytes: capture.bytes,
-            height: capture.height,
-            mimeType: capture.mimeType,
-            uri: capture.uri,
-            width: capture.width,
-          },
-          screen: "realtime_camera",
-          sessionId,
-          stepId,
-        });
-
         if (activeStepRef.current?.id !== stepId) {
           logInspectionFlowEvent({
             event: "realtime_capture_cancelled",
@@ -1427,25 +1405,19 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         isFrameJudgementInFlightRef.current = true;
         clearCameraFrameJudgeReleaseTimer();
         await voiceDriver.sendControlEvent(reviewEvent, {
-          imageDataUrl: capture.dataUrl,
-          sourceUri: capture.uri,
           stepId,
         });
         logInspectionFlowEvent({
-          event: "captured_photo_review_sent",
+          event: "captured_photo_review_requested",
           payload: {
-            bytes: capture.bytes,
             content: reviewEvent,
-            height: capture.height,
-            localUri: capture.uri,
-            width: capture.width,
+            source: "pipecat-camera-frame",
           },
           screen: "realtime_camera",
           sessionId,
           stepId,
         });
       } catch (error) {
-        logInspectionScreen("capture-frame:error", getInspectionErrorMessage(error));
         logInspectionFlowEvent({
           event: "realtime_capture_failed",
           payload: { error: getInspectionErrorMessage(error) },

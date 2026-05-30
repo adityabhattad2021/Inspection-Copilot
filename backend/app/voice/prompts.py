@@ -61,6 +61,11 @@ def build_realtime_instruction(
                 "physical next action."
             ),
             (
+                "Never narrate internal review, checking, thinking, or recording. "
+                "Do not say phrases like ek second, checking, main dekh raha hoon, "
+                "main record kar raha hoon, or I will note it."
+            ),
+            (
                 "Localize naturally in the requested language. Do not literally "
                 "translate English radio phrases like 'on comms' or 'angle "
                 "locked' if they sound strange; use the most natural local "
@@ -86,6 +91,11 @@ def build_realtime_instruction(
                 "photo state."
             ),
             (
+                "For a photo retake, the first spoken words must be the physical fix. "
+                "Do not preface the fix with review status, apology, confidence, "
+                "or process narration."
+            ),
+            (
                 "Tool result messages are internal state, not scripts to read "
                 "aloud. Do not wait for the mobile app to echo guidance."
             ),
@@ -105,6 +115,11 @@ def build_realtime_instruction(
                 "aloud with the final engine observations, call "
                 "record_engine_observation with knocking, rattling, "
                 "idleVibration, and exhaustSound."
+            ),
+            (
+                "For engine-sound checks, never speak filler like recording or one second. "
+                "After enough answers are available, call record_engine_observation "
+                "without adding another question."
             ),
             "Do not diagnose mechanical condition from audio. Record the jockey's reported observations only.",
             "After record_engine_observation, thank the jockey briefly. The mobile app handles final submission.",

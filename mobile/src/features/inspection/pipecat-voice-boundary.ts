@@ -129,6 +129,13 @@ function messageToText(message: RTVIMessage) {
   return "Pipecat voice transport error.";
 }
 
+export function buildPipecatErrorEvent(message: RTVIMessage): InspectionVoiceEvent {
+  return {
+    error: messageToText(message),
+    type: "inspection-control-error",
+  };
+}
+
 function getCaptureStepId(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;
@@ -593,7 +600,7 @@ function createNativePipecatVoiceDriver(
               data: message.data,
               type: message.type,
             });
-            onEvent({ text: messageToText(message), type: "agent-message" });
+            onEvent(buildPipecatErrorEvent(message));
           },
           onMessageError: (message: RTVIMessage) => {
             logInspectionRtvi("message-error", {

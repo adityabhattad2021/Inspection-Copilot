@@ -14,6 +14,7 @@ if os.environ.get("JOCKEY_COPILOT_STORAGE_BACKEND") == "dynamodb":
         list_ai_interventions,
         list_evidence_items,
         list_profile_payloads,
+        list_report_payloads,
         list_structured_observations,
         list_vehicles,
         load_profile_payload,
@@ -55,6 +56,7 @@ else:
         list_ai_interventions,
         list_evidence_items,
         list_structured_observations,
+        list_report_payloads,
         load_report_payload,
         save_report_payload,
     )
@@ -75,6 +77,7 @@ __all__ = [
     "list_ai_interventions",
     "list_evidence_items",
     "list_profile_payloads",
+    "list_report_payloads",
     "list_structured_observations",
     "list_vehicles",
     "load_profile_payload",

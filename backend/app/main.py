@@ -13,6 +13,7 @@ def configure_logging() -> None:
 
 configure_logging()
 
+from app.routes.admin import router as admin_router
 from app.routes.ai import router as ai_router
 from app.routes.debug import router as debug_router
 from app.routes.evidence import router as evidence_router
@@ -34,6 +35,7 @@ def health() -> dict[str, str]:
 app.include_router(vehicles_router)
 app.include_router(profiles_router)
 app.include_router(sessions_router)
+app.include_router(admin_router)
 app.include_router(ai_router)
 app.include_router(evidence_router)
 app.include_router(uploads_router)

@@ -397,13 +397,21 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
             </View>
           </View>
         </View>
-        <Button
-          disabled={!canLookup}
-          label="Lookup vehicle"
-          loading={isLookingUp}
-          onPress={handleLookup}
-          size="lg"
-        />
+        <View style={{ gap: spacing.xs }}>
+          <Button
+            disabled={!canLookup}
+            label="Lookup vehicle"
+            loading={isLookingUp}
+            onPress={handleLookup}
+            size="lg"
+          />
+          <Button
+            label="My reports"
+            onPress={() => router.push("/reports" as never)}
+            size="md"
+            variant="ghost"
+          />
+        </View>
       </View>
     </ScrollView>
   );

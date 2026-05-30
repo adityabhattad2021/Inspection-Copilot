@@ -202,3 +202,41 @@ def load_report_payload(session_id: str) -> dict[str, Any] | None:
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
+
+
+def list_report_payloads() -> list[dict[str, Any]]:
+    initialize_database()
+    with connect_database() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                report_id,
+                session_id,
+                status,
+                completion_score,
+                media_quality_score,
+                pricing_risk,
+                report_json,
+                report_html_path,
+                created_at,
+                updated_at
+            FROM reports
+            ORDER BY created_at DESC, report_id DESC
+            """
+        ).fetchall()
+
+    return [
+        {
+            "reportId": row["report_id"],
+            "sessionId": row["session_id"],
+            "status": row["status"],
+            "completionScore": row["completion_score"] or 0.0,
+            "mediaQualityScore": row["media_quality_score"] or 0.0,
+            "pricingRisk": row["pricing_risk"],
+            "reportJson": json.loads(row["report_json"]),
+            "reportHtmlPath": row["report_html_path"],
+            "createdAt": row["created_at"],
+            "updatedAt": row["updated_at"],
+        }
+        for row in rows
+    ]

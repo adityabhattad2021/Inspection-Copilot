@@ -1,6 +1,10 @@
 import type { MediaDeviceInfo } from "@daily-co/react-native-webrtc";
+import type { RTVIMessage } from "@pipecat-ai/client-js";
 
-import { selectSpeakerphone } from "./pipecat-voice-boundary";
+import {
+  buildPipecatErrorEvent,
+  selectSpeakerphone,
+} from "./pipecat-voice-boundary";
 
 function audioDevice(deviceId: string, label: string): MediaDeviceInfo {
   return {
@@ -38,4 +42,25 @@ export function pipecatVoiceBoundaryAudioRouteContract() {
   }
 
   return speakerphone.deviceId;
+}
+
+export function pipecatVoiceBoundaryRtviErrorContract() {
+  const errorEvent = buildPipecatErrorEvent({
+    data: {},
+    type: "error",
+  } as RTVIMessage);
+
+  if (errorEvent.type !== "inspection-control-error") {
+    throw new Error("Pipecat runtime errors should not be emitted as agent speech.");
+  }
+
+  if ("text" in errorEvent) {
+    throw new Error("Pipecat runtime errors must not create agent-message text.");
+  }
+
+  if (errorEvent.error !== "Pipecat voice transport error.") {
+    throw new Error("Pipecat runtime errors should keep a debuggable fallback.");
+  }
+
+  return errorEvent.error;
 }

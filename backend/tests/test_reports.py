@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database import clear_database, seed_database
+from app.database import clear_database, seed_database, save_report_payload
 from app.main import app
 
 
@@ -122,6 +122,37 @@ def test_get_report_returns_json_for_dashboard_population():
     assert body["observations"][0]["structuredFields"]["abnormalVibration"] == (
         "mild at idle"
     )
+    assert body["evidence"][0]["imageUrl"].startswith(
+        f"/sessions/{session_id}/evidence/"
+    )
+
+
+def test_report_json_includes_demo_ready_insights_and_badges():
+    session_id = _create_completed_session()
+    client.post(f"/sessions/{session_id}/complete")
+
+    response = client.get(f"/sessions/{session_id}/report")
+
+    assert response.status_code == 200
+    body = response.json()
+    presentation = body["presentation"]
+    assert presentation["headline"].startswith("Pricing review recommended")
+    assert presentation["evidenceSummary"] == {
+        "acceptedEvidenceCount": 3,
+        "expectedEvidenceCount": 3,
+        "isComplete": True,
+        "missingStepIds": [],
+        "retakeCount": 0,
+    }
+    assert {badge["label"] for badge in presentation["badges"]} == {
+        "Needs review",
+        "Evidence complete",
+    }
+    assert presentation["engineSummary"]["severity"] == "minor"
+    assert any(
+        "mild vibration" in note.casefold()
+        for note in presentation["pricingNotes"]
+    )
 
 
 def test_create_report_endpoint_generates_report_after_steps_complete():
@@ -156,6 +187,54 @@ def test_get_report_html_returns_downloadable_html():
     assert "AI Inspection Quality Report" in response.text
     assert "KA03MX2147" in response.text
     assert "Mild Vibration" in response.text
+    assert "Needs review" in response.text
+    assert "Evidence complete" in response.text
+    assert "Pricing review" in response.text
+    assert "Engine inspection" in response.text
+    assert "Evidence photos" in response.text
+    assert f'src="/sessions/{session_id}/evidence/' in response.text
+
+
+def test_get_report_html_view_renders_inline_with_download_action():
+    session_id = _create_completed_session()
+    client.post(f"/sessions/{session_id}/complete")
+
+    response = client.get(f"/sessions/{session_id}/report.html?view=1")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "content-disposition" not in response.headers
+    assert "Download HTML" in response.text
+    assert f'href="/sessions/{session_id}/report.html"' in response.text
+    assert "JetBrains Mono" in response.text
+    assert "#F6F7F2" in response.text
+    assert "#D7F85C" in response.text
+
+
+def test_report_evidence_image_endpoint_serves_uploaded_photo():
+    create_response = client.post(
+        "/sessions",
+        json={"registrationNumber": "KA03MX2147"},
+    )
+    session_id = create_response.json()["sessionId"]
+    client.post(f"/sessions/{session_id}/start", json={})
+    photo_response = client.post(
+        "/evidence/photo",
+        data={
+            "sessionId": session_id,
+            "stepId": "front-main",
+            "sampleKey": "front-main-good",
+        },
+        files={"image": ("front-main.jpg", b"fake-jpeg-bytes", "image/jpeg")},
+    )
+    assert photo_response.status_code == 200
+    evidence_id = photo_response.json()["evidenceId"]
+
+    response = client.get(f"/sessions/{session_id}/evidence/{evidence_id}")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/jpeg")
+    assert response.content == b"fake-jpeg-bytes"
 
 
 def test_create_report_rejects_incomplete_session():
@@ -169,3 +248,170 @@ def test_create_report_rejects_incomplete_session():
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Inspection has pending steps"
+
+
+def test_admin_reports_reject_missing_or_invalid_token(monkeypatch):
+    monkeypatch.setenv("JOCKEY_COPILOT_ADMIN_TOKEN", "demo-secret")
+
+    missing_response = client.get("/admin/reports.json")
+    invalid_response = client.get(
+        "/admin/reports.json",
+        headers={"Authorization": "Bearer nope"},
+    )
+
+    assert missing_response.status_code == 401
+    assert invalid_response.status_code == 401
+
+
+def test_admin_reports_list_generated_reports_with_badges(monkeypatch):
+    monkeypatch.setenv("JOCKEY_COPILOT_ADMIN_TOKEN", "demo-secret")
+    session_id = _create_completed_session()
+    client.post(f"/sessions/{session_id}/complete")
+
+    response = client.get("/admin/reports.json?token=demo-secret")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reports"][0]["sessionId"] == session_id
+    assert body["reports"][0]["vehicle"]["registrationNumber"] == "KA03MX2147"
+    assert body["reports"][0]["badge"]["label"] == "Needs review"
+    assert body["reports"][0]["evidenceBadge"]["label"] == "Evidence complete"
+    assert body["reports"][0]["reportViewUrl"] == (
+        f"/sessions/{session_id}/report.html?view=1"
+    )
+    assert body["reports"][0]["reportHtmlUrl"] == f"/sessions/{session_id}/report.html"
+
+
+def test_admin_reports_derives_badges_for_legacy_report_payloads(monkeypatch):
+    monkeypatch.setenv("JOCKEY_COPILOT_ADMIN_TOKEN", "demo-secret")
+    session_id = _create_completed_session()
+    save_report_payload(
+        {
+            "reportId": "rpt_legacy",
+            "sessionId": session_id,
+            "status": "ready",
+            "completionScore": 1.0,
+            "mediaQualityScore": 0.93,
+            "pricingRisk": "low",
+            "reportHtmlPath": f"/sessions/{session_id}/report.html",
+            "createdAt": "2026-05-30T10:00:00Z",
+            "updatedAt": "2026-05-30T10:00:00Z",
+            "reportJson": {
+                "reportId": "rpt_legacy",
+                "sessionId": session_id,
+                "generatedAt": "2026-05-30T10:00:00Z",
+                "vehicle": {"registrationNumber": "KA03MX2147"},
+                "summary": {
+                    "acceptedEvidenceCount": 3,
+                    "completionScore": 1.0,
+                    "mediaQualityScore": 0.93,
+                    "pricingRisk": "low",
+                    "retakeCount": 0,
+                },
+                "steps": [
+                    {"kind": "photo", "status": "complete", "stepId": "front-main"},
+                    {"kind": "photo", "status": "complete", "stepId": "rear-main"},
+                    {
+                        "kind": "photo",
+                        "status": "complete",
+                        "stepId": "dashboard-odometer",
+                    },
+                    {
+                        "kind": "engine-guided",
+                        "status": "complete",
+                        "stepId": "engine-sound",
+                    },
+                ],
+                "evidence": [
+                    {"accepted": True, "kind": "photo", "stepId": "front-main"},
+                    {"accepted": True, "kind": "photo", "stepId": "rear-main"},
+                    {
+                        "accepted": True,
+                        "kind": "photo",
+                        "stepId": "dashboard-odometer",
+                    },
+                ],
+            },
+        }
+    )
+
+    response = client.get("/admin/reports.json?token=demo-secret")
+
+    assert response.status_code == 200
+    report = response.json()["reports"][0]
+    assert report["badge"]["label"] == "Low pricing risk"
+    assert report["evidenceBadge"]["label"] == "Evidence complete"
+    assert report["expectedEvidenceCount"] == 3
+
+
+def test_legacy_report_html_uses_derived_insights_without_failing():
+    session_id = _create_completed_session()
+    save_report_payload(
+        {
+            "reportId": "rpt_legacy",
+            "sessionId": session_id,
+            "status": "ready",
+            "completionScore": 1.0,
+            "mediaQualityScore": 0.93,
+            "pricingRisk": "low",
+            "reportHtmlPath": f"/sessions/{session_id}/report.html",
+            "createdAt": "2026-05-30T10:00:00Z",
+            "updatedAt": "2026-05-30T10:00:00Z",
+            "reportJson": {
+                "reportId": "rpt_legacy",
+                "sessionId": session_id,
+                "generatedAt": "2026-05-30T10:00:00Z",
+                "vehicle": {
+                    "registrationNumber": "KA03MX2147",
+                    "year": 2020,
+                    "make": "Hyundai",
+                    "model": "Creta",
+                    "variant": "SX",
+                },
+                "summary": {
+                    "acceptedEvidenceCount": 3,
+                    "completionScore": 1.0,
+                    "mediaQualityScore": 0.93,
+                    "pricingRisk": "low",
+                    "retakeCount": 0,
+                },
+                "steps": [
+                    {"fieldName": "Front Main", "kind": "photo", "section": "Exterior & Tyres", "status": "complete", "stepId": "front-main"},
+                    {"fieldName": "Rear Main", "kind": "photo", "section": "Exterior & Tyres", "status": "complete", "stepId": "rear-main"},
+                    {"fieldName": "Dashboard", "kind": "photo", "section": "Interior", "status": "complete", "stepId": "dashboard-odometer"},
+                    {"fieldName": "Engine sound", "kind": "engine-guided", "section": "Engine", "status": "complete", "stepId": "engine-sound"},
+                ],
+                "evidence": [
+                    {"accepted": True, "kind": "photo", "qualityScore": 0.93, "stepId": "front-main"},
+                    {"accepted": True, "kind": "photo", "qualityScore": 0.93, "stepId": "rear-main"},
+                    {"accepted": True, "kind": "photo", "qualityScore": 0.93, "stepId": "dashboard-odometer"},
+                ],
+                "observations": [],
+                "aiInterventions": [],
+                "auditTrail": [],
+            },
+        }
+    )
+
+    response = client.get(f"/sessions/{session_id}/report.html")
+
+    assert response.status_code == 200
+    assert "Low pricing risk" in response.text
+    assert "Evidence complete" in response.text
+
+
+def test_admin_dashboard_serves_react_shell_for_valid_token(monkeypatch):
+    monkeypatch.setenv("JOCKEY_COPILOT_ADMIN_TOKEN", "demo-secret")
+
+    response = client.get("/admin/reports?token=demo-secret")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Reports Admin" in response.text
+    assert "React.createElement" in response.text
+    assert "reportViewUrl" in response.text
+    assert "Download" in response.text
+    assert "JetBrains Mono" in response.text
+    assert "#F6F7F2" in response.text
+    assert "#D7F85C" in response.text
+    assert "#101820" in response.text

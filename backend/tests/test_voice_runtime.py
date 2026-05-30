@@ -14,6 +14,7 @@ from app.voice.realtime_bot import (
     build_inspection_control_ack,
     build_inspection_control_error,
     build_initial_realtime_messages,
+    build_realtime_photo_request_frame,
     build_realtime_photo_review_events,
     build_realtime_session_properties,
     build_realtime_text_events,
@@ -259,6 +260,9 @@ def test_realtime_instruction_includes_vehicle_step_language_and_guardrails():
     assert "accept_photo" in instruction
     assert "do not call any tool" in instruction
     assert "Speech alone never advances photo state" in instruction
+    assert "Never narrate internal review, checking, thinking, or recording" in instruction
+    assert "For a photo retake, the first spoken words must be the physical fix" in instruction
+    assert "For engine-sound checks, never speak filler like recording or one second" in instruction
     assert "Do not diagnose mechanical condition from audio" in instruction
     assert "SYSTEM_GUIDANCE:" not in instruction
     assert "SYSTEM_EVENT:" in instruction
@@ -450,14 +454,27 @@ def test_voice_tools_expose_frame_observation_and_completion_functions():
     ]
 
 
-def test_voice_transport_params_keep_camera_feed_off_the_voice_model():
+def test_voice_transport_params_enable_pipecat_camera_frames_for_photo_requests():
     params = build_voice_transport_params()
 
     assert params.audio_in_enabled is True
     assert params.audio_out_enabled is True
-    assert params.video_in_enabled is False
+    assert params.video_in_enabled is True
     assert params.audio_in_sample_rate == 24000
     assert params.audio_out_sample_rate == 24000
+
+
+def test_realtime_photo_request_frame_targets_camera_with_review_metadata():
+    frame = build_realtime_photo_request_frame(
+        content="SYSTEM_EVENT: CAPTURED_PHOTO_REVIEW for Front Main.",
+        source_uri=None,
+        step_id="front-main",
+    )
+
+    assert frame.text == "SYSTEM_EVENT: CAPTURED_PHOTO_REVIEW for Front Main."
+    assert frame.video_source == "camera"
+    assert frame.append_to_context is False
+    assert frame.metadata["stepId"] == "front-main"
 
 
 def test_gemini_voice_transport_uses_google_live_audio_sample_rates():
@@ -465,7 +482,7 @@ def test_gemini_voice_transport_uses_google_live_audio_sample_rates():
 
     assert params.audio_in_enabled is True
     assert params.audio_out_enabled is True
-    assert params.video_in_enabled is False
+    assert params.video_in_enabled is True
     assert params.audio_in_sample_rate == 16000
     assert params.audio_out_sample_rate == 24000
 
