@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
-  findNodeHandle,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import {
-  MediaStream,
-  RTCView,
-  type MediaStreamTrack,
-} from "@daily-co/react-native-webrtc";
+  Camera,
+  CommonResolutions,
+  useCameraPermission,
+  usePhotoOutput,
+} from "react-native-vision-camera";
 
 import { colors, radius, spacing, typography } from "@/src/components/ui";
+import type { CapturedVisionCameraPhoto } from "@/src/features/inspection/vision-camera-photo-capture";
 
 type RealtimeCameraScreenProps = {
   bottomInset: number;
@@ -21,12 +22,12 @@ type RealtimeCameraScreenProps = {
   errorMessage: string | null;
   instruction: string;
   isBusy: boolean;
-  onCapturePhoto: () => void;
-  onVideoViewReady: (viewTag: number | null) => void;
+  onCameraError: (message: string) => void;
+  onCameraReadyChange: (isReady: boolean) => void;
+  onCapturePhoto: (photo: CapturedVisionCameraPhoto) => void;
   stepNumber: number;
   stepTitle: string;
   topInset: number;
-  videoTrack: MediaStreamTrack | null;
 };
 
 const TOP_GLASS_CONTENT_HEIGHT = 168;
@@ -38,63 +39,118 @@ export function RealtimeCameraScreen({
   errorMessage,
   instruction,
   isBusy,
+  onCameraError,
+  onCameraReadyChange,
   onCapturePhoto,
-  onVideoViewReady,
   stepNumber,
   stepTitle,
   topInset,
-  videoTrack,
 }: RealtimeCameraScreenProps) {
-  const rtcViewRef = useRef(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const photoOutput = usePhotoOutput({
+    containerFormat: "jpeg",
+    quality: 0.92,
+    qualityPrioritization: "quality",
+    targetResolution: CommonResolutions.FHD_4_3,
+  });
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    if (!videoTrack) {
-      setStream(null);
-      onVideoViewReady(null);
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasPermission) {
+      void requestPermission();
+    }
+  }, [hasPermission, requestPermission]);
+
+  useEffect(() => {
+    onCameraReadyChange(Boolean(hasPermission && isCameraReady));
+  }, [hasPermission, isCameraReady, onCameraReadyChange]);
+
+  async function handleCapturePress() {
+    if (!hasPermission) {
+      const granted = await requestPermission();
+      if (!granted) {
+        onCameraError("Camera permission is required for inspection photos.");
+      }
       return;
     }
 
-    const nextStream = new MediaStream([videoTrack]);
-    setStream(nextStream);
-
-    return () => {
-      onVideoViewReady(null);
-      nextStream.release(false);
-    };
-  }, [onVideoViewReady, videoTrack]);
-
-  useEffect(() => {
-    if (!stream) {
+    if (!isCameraReady) {
+      onCameraError("Camera is still getting ready.");
       return;
     }
 
-    const timer = setTimeout(() => {
-      onVideoViewReady(findNodeHandle(rtcViewRef.current));
-    }, 0);
+    const photo = await photoOutput.capturePhoto(
+      {
+        enableDistortionCorrection: true,
+        enableShutterSound: true,
+        flashMode: "off",
+      },
+      {},
+    );
 
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [onVideoViewReady, stream]);
+    try {
+      const [imageBytes, filePath] = await Promise.all([
+        photo.getFileDataAsync(),
+        photo.saveToTemporaryFileAsync(),
+      ]);
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      onCapturePhoto({
+        height: photo.height,
+        imageBytes,
+        sourceUri: `file://${filePath}`,
+        width: photo.width,
+      });
+    } finally {
+      photo.dispose();
+    }
+  }
 
   return (
     <View style={styles.screen}>
-      {stream ? (
-        <RTCView
-          ref={rtcViewRef}
-          mirror={false}
-          objectFit="cover"
-          streamURL={stream.toURL()}
+      {hasPermission ? (
+        <Camera
+          device="back"
+          isActive
+          onError={(error) => {
+            setIsCameraReady(false);
+            onCameraError(error.message);
+          }}
+          onStarted={() => {
+            setIsCameraReady(true);
+          }}
+          onStopped={() => {
+            setIsCameraReady(false);
+          }}
+          outputs={[photoOutput]}
+          resizeMode="cover"
           style={StyleSheet.absoluteFillObject}
         />
       ) : (
         <View style={styles.cameraFallback}>
           <Text selectable style={[typography.label, styles.fallbackText]}>
-            Camera warming up
+            Camera permission needed
           </Text>
         </View>
       )}
+
+      {hasPermission && !isCameraReady ? (
+        <View pointerEvents="none" style={styles.cameraFallbackOverlay}>
+          <Text selectable style={[typography.label, styles.fallbackText]}>
+            Camera warming up
+          </Text>
+        </View>
+      ) : null}
 
       <View
         pointerEvents="none"
@@ -174,11 +230,16 @@ export function RealtimeCameraScreen({
         <Pressable
           accessibilityLabel={isBusy ? "Reviewing capture" : "Capture photo"}
           accessibilityRole="button"
-          disabled={isBusy || !videoTrack}
-          onPress={onCapturePhoto}
+          disabled={isBusy || !hasPermission || !isCameraReady}
+          onPress={() => {
+            void handleCapturePress().catch((error) => {
+              onCameraError(error instanceof Error ? error.message : String(error));
+            });
+          }}
           style={({ pressed }) => [
             styles.captureButton,
-            (isBusy || !videoTrack) && styles.captureButtonDisabled,
+            (isBusy || !hasPermission || !isCameraReady) &&
+              styles.captureButtonDisabled,
             pressed && styles.captureButtonPressed,
           ]}
         >
@@ -203,6 +264,13 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     backgroundColor: colors.camera,
+    justifyContent: "center",
+    padding: spacing.lg,
+  },
+  cameraFallbackOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    backgroundColor: "rgba(16, 24, 32, 0.64)",
     justifyContent: "center",
     padding: spacing.lg,
   },

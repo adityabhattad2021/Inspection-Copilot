@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, ScrollView, Text } from "react-native";
-import type { MediaStreamTrack } from "@daily-co/react-native-webrtc";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -25,6 +24,7 @@ import {
 } from "@/src/components/ui";
 import { getInspectionStepMedia } from "@/src/data/live-inspection-media";
 import { CopilotStatusCard } from "@/src/features/inspection/copilot-status-card";
+import { getCameraStepStartBlockers } from "@/src/features/inspection/camera-step-start-gate";
 import { logInspectionFlowEvent } from "@/src/features/inspection/inspection-debug-log";
 import {
   EngineGuidedCheck,
@@ -64,6 +64,10 @@ import {
 import { LiveGuidanceCard } from "@/src/features/inspection/live-guidance-card";
 import { getCachedProfile } from "@/src/features/onboarding/profile-storage";
 import { saveInspectionReport } from "@/src/features/reports/report-storage";
+import {
+  buildVisionCameraPhotoReviewOptions,
+  type CapturedVisionCameraPhoto,
+} from "@/src/features/inspection/vision-camera-photo-capture";
 
 type InspectionScreenProps = {
   sessionId: string;
@@ -111,10 +115,9 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   const [isGreetingActive, setIsGreetingActive] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isComplete, setIsComplete] = useState(false);
+  const [isVisionCameraReady, setIsVisionCameraReady] = useState(false);
+  const [isVoiceReady, setIsVoiceReady] = useState(false);
   const [observationTranscript, setObservationTranscript] = useState("");
-  const [localVideoTrack, setLocalVideoTrack] = useState<MediaStreamTrack | null>(
-    null,
-  );
   const activeStepRef = useRef<InspectionStep | null>(null);
   const agentUtteranceRef = useRef("");
   const captureFlash = useRef(new Animated.Value(0)).current;
@@ -132,7 +135,6 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   );
   const cameraFrameJudgeReleaseTimerRef =
     useRef<ReturnType<typeof setTimeout> | null>(null);
-  const realtimeVideoViewTagRef = useRef<number | null>(null);
   const activeAgentProcessingPhasesRef = useRef<Set<AgentProcessingPhase>>(
     new Set(),
   );
@@ -142,6 +144,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   const isFrameJudgementInFlightRef = useRef(false);
   const isScreenMountedRef = useRef(true);
   const lastLoggedScreenStateRef = useRef<string | null>(null);
+  const lastLoggedVisionCameraReadyRef = useRef<boolean | null>(null);
   const hasRequestedInspectionCompletionRef = useRef(false);
   const completionRedirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -480,27 +483,6 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           return;
         }
 
-        if (event.type === "local-video-track") {
-          logInspectionScreen("local-video-track", {
-            hasTrack: Boolean(event.videoTrack),
-            id: event.videoTrack?.id ?? null,
-            readyState: event.videoTrack?.readyState ?? null,
-          });
-          logInspectionFlowEvent({
-            event: "local_video_track",
-            payload: {
-              hasTrack: Boolean(event.videoTrack),
-              id: event.videoTrack?.id ?? null,
-              readyState: event.videoTrack?.readyState ?? null,
-            },
-            screen: "voice_runtime",
-            sessionId,
-            stepId: activeStepRef.current?.id,
-          });
-          setLocalVideoTrack(event.videoTrack);
-          return;
-        }
-
         if (event.type === "capture-requested") {
           logInspectionScreen("capture-requested", { stepId: event.stepId });
           logInspectionFlowEvent({
@@ -601,6 +583,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         }
 
         if (event.type === "voice-ready") {
+          setIsVoiceReady(true);
           logInspectionScreen("voice-ready");
           logInspectionFlowEvent({
             event: "voice_ready",
@@ -687,11 +670,12 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           }
         : null,
       frameIndex,
-      hasLocalVideoTrack: Boolean(localVideoTrack),
       isBusy,
       isComplete,
       isGreetingActive,
       isLoading,
+      isVisionCameraReady,
+      isVoiceReady,
       progress: session
         ? {
             completedStepCount,
@@ -721,7 +705,8 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     isComplete,
     isGreetingActive,
     isLoading,
-    localVideoTrack,
+    isVisionCameraReady,
+    isVoiceReady,
     session,
     visibleScreen,
   ]);
@@ -786,7 +771,9 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       updateGreetingDisplayMessage("");
       setErrorMessage(null);
       setIsComplete(false);
-      setLocalVideoTrack(null);
+      setIsVisionCameraReady(false);
+      lastLoggedVisionCameraReadyRef.current = null;
+      setIsVoiceReady(false);
       setObservationTranscript("");
       clearGreetingFinishTimer();
       clearGreetingWordTimer();
@@ -916,44 +903,32 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   ]);
 
   useEffect(() => {
-    const blockers: string[] = [];
-    if (isLoading) {
-      blockers.push("loading");
-    }
-    if (isGreetingActive) {
-      blockers.push("greeting_active");
-    }
-    if (!session) {
-      blockers.push("no_session");
-    }
-    if (!activeStep) {
-      blockers.push("no_active_step");
-    }
-    if (!isRealtimeCameraStep) {
-      blockers.push("not_realtime_camera_step");
-    }
-    if (activeStep?.status === "needs_observation") {
-      blockers.push("needs_observation");
-    }
-    if (!localVideoTrack) {
-      blockers.push("no_local_video_track");
-    }
-    if (initialStepInstructionSentRef.current) {
-      blockers.push("already_sent");
-    }
+    const blockers = getCameraStepStartBlockers({
+      hasActiveStep: Boolean(activeStep),
+      hasSession: Boolean(session),
+      isGreetingActive,
+      isInstructionAlreadySent: initialStepInstructionSentRef.current,
+      isLoading,
+      isRealtimeCameraStep,
+      isVisionCameraReady,
+      isVoiceReady,
+      stepNeedsObservation: activeStep?.status === "needs_observation",
+    });
 
     if (blockers.length > 0) {
       if (activeStep?.kind === "photo") {
         logInspectionScreen("camera-start:waiting", {
           blockers,
-          hasVideoTrack: Boolean(localVideoTrack),
+          isVisionCameraReady,
+          isVoiceReady,
           stepId: activeStep.id,
         });
         logInspectionFlowEvent({
           event: "camera_start_waiting",
           payload: {
             blockers,
-            hasVideoTrack: Boolean(localVideoTrack),
+            isVisionCameraReady,
+            isVoiceReady,
           },
           screen: "realtime_camera",
           sessionId,
@@ -977,14 +952,16 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
     const startTimer = setTimeout(() => {
       logInspectionScreen("camera-start:send", {
-        hasVideoTrack: Boolean(localVideoTrack),
+        isVisionCameraReady,
+        isVoiceReady,
         stepId: activeStep.id,
       });
       logInspectionFlowEvent({
         event: "camera_start_instruction_sent",
         payload: {
           content: startEvent,
-          hasVideoTrack: Boolean(localVideoTrack),
+          isVisionCameraReady,
+          isVoiceReady,
         },
         screen: "realtime_camera",
         sessionId,
@@ -1019,11 +996,35 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     isGreetingActive,
     isLoading,
     isRealtimeCameraStep,
-    localVideoTrack,
+    isVisionCameraReady,
+    isVoiceReady,
     session,
     sessionId,
     voiceDriver,
   ]);
+
+  const handleVisionCameraReadyChange = useCallback(
+    (isReady: boolean) => {
+      setIsVisionCameraReady(isReady);
+      if (lastLoggedVisionCameraReadyRef.current === isReady) {
+        return;
+      }
+
+      lastLoggedVisionCameraReadyRef.current = isReady;
+      logInspectionScreen("vision-camera-ready", {
+        isReady,
+        stepId: activeStepRef.current?.id,
+      });
+      logInspectionFlowEvent({
+        event: "vision_camera_ready",
+        payload: { isReady },
+        screen: "realtime_camera",
+        sessionId,
+        stepId: activeStepRef.current?.id,
+      });
+    },
+    [sessionId],
+  );
 
   useEffect(() => {
     if (
@@ -1345,7 +1346,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
   }
 
   const handleRealtimeCapture = useCallback(
-    async (stepId: string) => {
+    async (stepId: string, capturedPhoto: CapturedVisionCameraPhoto) => {
       const step = activeStepRef.current;
       if (!step || step.id !== stepId || isBusyRef.current) {
         logInspectionFlowEvent({
@@ -1361,15 +1362,15 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         });
         return;
       }
-      if (!localVideoTrack) {
+      if (!isVisionCameraReady) {
         logInspectionFlowEvent({
           event: "realtime_capture_failed",
-          payload: { error: "Realtime camera track is not ready." },
+          payload: { error: "Vision camera is not ready." },
           screen: "realtime_camera",
           sessionId,
           stepId,
         });
-        setErrorMessage("Realtime camera track is not ready.");
+        setErrorMessage("Camera is not ready.");
         return;
       }
       isBusyRef.current = true;
@@ -1377,7 +1378,12 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       setErrorMessage(null);
       logInspectionFlowEvent({
         event: "realtime_capture_started",
-        payload: { source: "pipecat-camera-frame" },
+        payload: {
+          bytes: capturedPhoto.imageBytes.byteLength,
+          height: capturedPhoto.height,
+          source: "vision-camera-photo",
+          width: capturedPhoto.width,
+        },
         screen: "realtime_camera",
         sessionId,
         stepId,
@@ -1405,13 +1411,21 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         isFrameJudgementInFlightRef.current = true;
         clearCameraFrameJudgeReleaseTimer();
         await voiceDriver.sendControlEvent(reviewEvent, {
+          ...buildVisionCameraPhotoReviewOptions({
+            imageBytes: capturedPhoto.imageBytes,
+            sourceUri: capturedPhoto.sourceUri,
+            stepId,
+          }),
           stepId,
         });
         logInspectionFlowEvent({
           event: "captured_photo_review_requested",
           payload: {
+            bytes: capturedPhoto.imageBytes.byteLength,
             content: reviewEvent,
-            source: "pipecat-camera-frame",
+            height: capturedPhoto.height,
+            source: "vision-camera-photo",
+            width: capturedPhoto.width,
           },
           screen: "realtime_camera",
           sessionId,
@@ -1434,26 +1448,11 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
     },
     [
       clearCameraFrameJudgeReleaseTimer,
-      localVideoTrack,
+      isVisionCameraReady,
       playCaptureFlash,
       sessionId,
       voiceDriver,
     ],
-  );
-
-  const handleRealtimeVideoViewReady = useCallback(
-    (viewTag: number | null) => {
-      realtimeVideoViewTagRef.current = viewTag;
-      logInspectionScreen("camera-view-ready", { viewTag });
-      logInspectionFlowEvent({
-        event: "camera_view_ready",
-        payload: { viewTag },
-        screen: "realtime_camera",
-        sessionId,
-        stepId: activeStepRef.current?.id,
-      });
-    },
-    [sessionId],
   );
 
   function handleUseNextFrame() {
@@ -1651,14 +1650,14 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         errorMessage={errorMessage}
         instruction={agentMessage}
         isBusy={isBusy}
-        onCapturePhoto={() => {
-          void handleRealtimeCapture(activeStep.id);
+        onCameraError={setErrorMessage}
+        onCameraReadyChange={handleVisionCameraReadyChange}
+        onCapturePhoto={(capturedPhoto) => {
+          void handleRealtimeCapture(activeStep.id, capturedPhoto);
         }}
-        onVideoViewReady={handleRealtimeVideoViewReady}
         stepNumber={Math.max(0, activeStepIndex) + 1}
         stepTitle={activeStep.fieldName}
         topInset={insets.top}
-        videoTrack={localVideoTrack}
       />
     );
   }

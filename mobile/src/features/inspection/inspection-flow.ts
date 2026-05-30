@@ -84,7 +84,7 @@ export function getRealtimeCameraStepStartEvent(
 ) {
   return [
     getInspectionStepChangedEvent(step, index),
-    "The Android camera preview is live for the jockey.",
+    "The Android camera capture screen is open for the jockey; the preview may still be warming up.",
     "Do not judge the camera preview from STEP_CHANGED.",
     "Ask the jockey to tap Capture when the requested view is framed.",
     "Wait for CAPTURED_PHOTO_REVIEW before deciding whether to accept or retake.",

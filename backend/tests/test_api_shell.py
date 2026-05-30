@@ -46,6 +46,27 @@ def test_vehicle_lookup_returns_demo_vehicle_with_camel_case_fields():
     }
 
 
+def test_vehicle_lookup_returns_thar_event_demo_vehicle():
+    response = client.post(
+        "/vehicles/lookup",
+        json={"registrationNumber": " HR 98 E 5819 "},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "registrationNumber": "HR98E5819",
+        "make": "Mahindra",
+        "model": "Thar",
+        "year": 2023,
+        "variant": "LX",
+        "fuelType": "Petrol",
+        "transmission": "Automatic",
+        "bodyType": "SUV",
+        "registrationCity": "Gurugram",
+        "registrationState": "Haryana",
+    }
+
+
 def test_list_vehicles_returns_seeded_vehicles():
     response = client.get("/vehicles")
 
@@ -55,6 +76,7 @@ def test_list_vehicles_returns_seeded_vehicles():
         "KA03MX2147",
         "KA05NB7777",
         "DL8CAF5031",
+        "HR98E5819",
     ]
     assert body["vehicles"][0]["make"] == "Hyundai"
 

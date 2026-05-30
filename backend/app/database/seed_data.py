@@ -41,6 +41,18 @@ MOCK_VEHICLES: list[dict[str, Any]] = [
         "registration_city": "Delhi",
         "registration_state": "Delhi",
     },
+    {
+        "registration_number": "HR98E5819",
+        "make": "Mahindra",
+        "model": "Thar",
+        "year": 2023,
+        "variant": "LX",
+        "fuel_type": "Petrol",
+        "transmission": "Automatic",
+        "body_type": "SUV",
+        "registration_city": "Gurugram",
+        "registration_state": "Haryana",
+    },
 ]
 
 

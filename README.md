@@ -94,7 +94,7 @@ Important backend modules:
 
 ## Mobile
 
-The mobile app is an Expo SDK 54 React Native app intended for an Android development build. Expo Go is not enough for the full demo because the app uses native voice/camera dependencies and a local Android frame-capture module.
+The mobile app is an Expo SDK 54 React Native app intended for an Android development build. Expo Go is not enough for the full demo because the app uses native voice/camera dependencies, including Pipecat/Daily voice transport and React Native VisionCamera.
 
 Important mobile modules:
 
@@ -105,7 +105,8 @@ Important mobile modules:
 - `mobile/src/api/client.ts` owns typed backend calls.
 - `mobile/src/features/inspection/inspection-screen.tsx` owns the live inspection workflow.
 - `mobile/src/features/inspection/pipecat-voice-boundary.ts` owns mobile voice runtime events.
-- `mobile/src/features/inspection/realtime-frame-capture.ts` bridges Android frame capture.
+- `mobile/src/features/inspection/realtime-camera-screen.tsx` owns the VisionCamera preview and still capture UI.
+- `mobile/src/features/inspection/vision-camera-photo-capture.ts` encodes VisionCamera JPEGs for Pipecat photo review.
 - `mobile/src/features/inspection/inspection-debug-log.ts` sends dev flow logs to the backend.
 - `mobile/src/data/live-inspection-media.ts` contains deterministic sample frames.
 

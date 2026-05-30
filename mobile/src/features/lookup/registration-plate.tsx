@@ -23,6 +23,8 @@ type RegistrationPlateTextProps = {
   value: string;
 };
 
+const IND_STRIP_COLOR = "#1D4F91";
+
 const plateSizes = {
   compact: {
     borderWidth: 1.5,
@@ -67,7 +69,7 @@ export function RegistrationPlateShell({
         {
           alignItems: "stretch",
           alignSelf: "center",
-          backgroundColor: colors.white,
+          backgroundColor: IND_STRIP_COLOR,
           borderColor: colors.text,
           borderCurve: "continuous",
           borderRadius: radius.md,
@@ -84,7 +86,8 @@ export function RegistrationPlateShell({
       <View
         style={{
           alignItems: "center",
-          backgroundColor: "#1D4F91",
+          alignSelf: "stretch",
+          backgroundColor: IND_STRIP_COLOR,
           justifyContent: "center",
           paddingHorizontal: spacing.xs,
           width: sizeStyle.prefixWidth,
@@ -104,7 +107,15 @@ export function RegistrationPlateShell({
           IND
         </Text>
       </View>
-      {children}
+      <View
+        style={{
+          alignSelf: "stretch",
+          backgroundColor: colors.white,
+          flex: 1,
+        }}
+      >
+        {children}
+      </View>
     </View>
   );
 }

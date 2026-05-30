@@ -29,6 +29,7 @@ type VehicleLookupScreenProps = {
 
 const DEMO_REGISTRATION_NUMBER = "KA03MX2147";
 export const LOOKUP_SCREEN_LAYOUT = {
+  actionButtonSize: "lg",
   chrome: "inline-inspection-console",
   input: "ind-number-plate",
   mode: "greeting-inline-console",
@@ -403,12 +404,12 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
             label="Lookup vehicle"
             loading={isLookingUp}
             onPress={handleLookup}
-            size="lg"
+            size={LOOKUP_SCREEN_LAYOUT.actionButtonSize}
           />
           <Button
             label="My reports"
             onPress={() => router.push("/reports" as never)}
-            size="md"
+            size={LOOKUP_SCREEN_LAYOUT.actionButtonSize}
             variant="ghost"
           />
         </View>

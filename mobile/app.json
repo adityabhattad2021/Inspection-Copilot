@@ -40,11 +40,10 @@
     },
     "plugins": [
       "expo-router",
-      "./plugins/withRealtimeFrameCapture",
       [
         "@daily-co/config-plugin-rn-daily-js",
         {
-          "enableCamera": true,
+          "enableCamera": false,
           "enableMicrophone": true,
           "enableScreenShare": false
         }

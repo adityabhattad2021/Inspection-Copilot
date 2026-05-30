@@ -14,7 +14,6 @@ from app.voice.realtime_bot import (
     build_inspection_control_ack,
     build_inspection_control_error,
     build_initial_realtime_messages,
-    build_realtime_photo_request_frame,
     build_realtime_photo_review_events,
     build_realtime_session_properties,
     build_realtime_text_events,
@@ -22,6 +21,7 @@ from app.voice.realtime_bot import (
     build_voice_transport_params,
     build_voice_rtvi_observer_params,
     decode_image_data_url,
+    is_realtime_photo_review_message,
     resolve_runner_session_id,
     resolve_realtime_photo_transfer,
     store_realtime_photo_transfer_chunk,
@@ -371,6 +371,31 @@ def test_realtime_photo_transfer_waits_for_all_chunks_before_reassembly():
     assert "photo_123" in transfers
 
 
+def test_realtime_step_instruction_that_mentions_photo_review_is_not_photo_payload():
+    assert (
+        is_realtime_photo_review_message(
+            content=(
+                "SYSTEM_EVENT: STEP_CHANGED 1: Front Main. "
+                "Wait for CAPTURED_PHOTO_REVIEW before deciding whether to accept."
+            ),
+            image_data_url=None,
+            image_transfer_id=None,
+        )
+        is False
+    )
+
+
+def test_realtime_photo_review_requires_explicit_image_payload_marker():
+    assert (
+        is_realtime_photo_review_message(
+            content="SYSTEM_EVENT: CAPTURED_PHOTO_REVIEW for Front Main.",
+            image_data_url=None,
+            image_transfer_id="photo_123",
+        )
+        is True
+    )
+
+
 def test_realtime_tool_result_events_return_output_and_create_response():
     item_event, response_event = build_realtime_tool_result_events(
         "call_frame_adjust",
@@ -454,27 +479,14 @@ def test_voice_tools_expose_frame_observation_and_completion_functions():
     ]
 
 
-def test_voice_transport_params_enable_pipecat_camera_frames_for_photo_requests():
+def test_voice_transport_params_disable_pipecat_camera_frames_for_vision_camera():
     params = build_voice_transport_params()
 
     assert params.audio_in_enabled is True
     assert params.audio_out_enabled is True
-    assert params.video_in_enabled is True
+    assert params.video_in_enabled is False
     assert params.audio_in_sample_rate == 24000
     assert params.audio_out_sample_rate == 24000
-
-
-def test_realtime_photo_request_frame_targets_camera_with_review_metadata():
-    frame = build_realtime_photo_request_frame(
-        content="SYSTEM_EVENT: CAPTURED_PHOTO_REVIEW for Front Main.",
-        source_uri=None,
-        step_id="front-main",
-    )
-
-    assert frame.text == "SYSTEM_EVENT: CAPTURED_PHOTO_REVIEW for Front Main."
-    assert frame.video_source == "camera"
-    assert frame.append_to_context is False
-    assert frame.metadata["stepId"] == "front-main"
 
 
 def test_gemini_voice_transport_uses_google_live_audio_sample_rates():
@@ -482,7 +494,7 @@ def test_gemini_voice_transport_uses_google_live_audio_sample_rates():
 
     assert params.audio_in_enabled is True
     assert params.audio_out_enabled is True
-    assert params.video_in_enabled is True
+    assert params.video_in_enabled is False
     assert params.audio_in_sample_rate == 16000
     assert params.audio_out_sample_rate == 24000
 

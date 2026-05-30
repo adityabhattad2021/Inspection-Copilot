@@ -1,18 +1,13 @@
 import base64
-import io
 import json
 import os
-from collections.abc import Awaitable, Callable
 from typing import Any
 
 from loguru import logger
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
-from pipecat.frames.frames import Frame, UserImageRequestFrame, UserImageRawFrame
-from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.processors.frameworks.rtvi import RTVIObserverParams
 from pipecat.services.openai.realtime import events
 from pipecat.transports.base_transport import TransportParams
-from PIL import Image
 
 from app.database import load_session_payload
 from app.voice.config import (
@@ -46,7 +41,6 @@ INSPECTION_CONTROL_ERROR_TYPE = "inspection_control_error"
 INSPECTION_CONTROL_PREVIEW_LENGTH = 180
 INSPECTION_CONTROL_PHOTO_CHUNK_TYPE = "inspection-control-photo-chunk"
 MAX_PHOTO_TRANSFER_CHUNKS = 128
-PIPECAT_CAMERA_VIDEO_SOURCE = "camera"
 RealtimePhotoTransfers = dict[str, list[str | None]]
 
 
@@ -157,64 +151,6 @@ def build_realtime_photo_review_events(
     return item_event, events.ResponseCreateEvent()
 
 
-def build_realtime_photo_request_frame(
-    *,
-    content: str,
-    source_uri: str | None,
-    step_id: str,
-) -> UserImageRequestFrame:
-    frame = UserImageRequestFrame(
-        append_to_context=False,
-        text=content,
-        user_id=step_id,
-        video_source=PIPECAT_CAMERA_VIDEO_SOURCE,
-    )
-    frame.metadata["stepId"] = step_id
-    if source_uri:
-        frame.metadata["sourceUri"] = source_uri
-    return frame
-
-
-def encode_realtime_photo_frame(
-    frame: UserImageRawFrame,
-) -> tuple[str, bytes, str]:
-    buffer = io.BytesIO()
-    Image.frombytes(frame.format or "RGB", frame.size, frame.image).save(
-        buffer,
-        format="JPEG",
-        quality=86,
-    )
-    image_bytes = buffer.getvalue()
-    image_data_url = (
-        "data:image/jpeg;base64,"
-        + base64.b64encode(image_bytes).decode("utf-8")
-    )
-    return image_data_url, image_bytes, "image/jpeg"
-
-
-class RequestedPhotoCaptureProcessor(FrameProcessor):
-    def __init__(
-        self,
-        on_requested_photo: Callable[[UserImageRawFrame], Awaitable[None]],
-        **kwargs: Any,
-    ):
-        super().__init__(**kwargs)
-        self._on_requested_photo = on_requested_photo
-
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
-        await super().process_frame(frame, direction)
-
-        if direction == FrameDirection.DOWNSTREAM and isinstance(
-            frame,
-            UserImageRawFrame,
-        ):
-            if frame.request is not None:
-                await self._on_requested_photo(frame)
-            return
-
-        await self.push_frame(frame, direction)
-
-
 def build_realtime_tool_result_events(
     tool_call_id: str,
     result: dict[str, Any],
@@ -264,7 +200,7 @@ def build_voice_transport_params(
         audio_out_enabled=True,
         audio_in_sample_rate=audio_in_sample_rate,
         audio_out_sample_rate=24000,
-        video_in_enabled=True,
+        video_in_enabled=False,
     )
 
 
@@ -320,6 +256,19 @@ def resolve_realtime_photo_transfer(
 
     transfers.pop(transfer_id, None)
     return "".join(chunk for chunk in chunks if chunk is not None)
+
+
+def is_realtime_photo_review_message(
+    *,
+    content: str,
+    image_data_url: Any,
+    image_transfer_id: Any,
+) -> bool:
+    if isinstance(image_data_url, str) and image_data_url.strip():
+        return True
+    if isinstance(image_transfer_id, str) and image_transfer_id.strip():
+        return True
+    return content.strip().startswith("SYSTEM_EVENT: CAPTURED_PHOTO_REVIEW")
 
 
 async def bot(runner_args: Any):
@@ -473,30 +422,6 @@ async def bot(runner_args: Any):
     def get_pending_photo(step_id: str) -> PendingPhotoReview | None:
         return pending_photo_reviews.get(step_id)
 
-    async def handle_requested_photo_frame(frame: UserImageRawFrame) -> None:
-        if frame.request is None:
-            return
-
-        step_id = str(frame.request.metadata.get("stepId") or "").strip()
-        if not step_id:
-            logger.warning(
-                "Ignoring requested photo frame without step id session_id={}",
-                session_id,
-            )
-            return
-
-        image_data_url, image_bytes, mime_type = encode_realtime_photo_frame(frame)
-        source_uri = frame.request.metadata.get("sourceUri")
-        pending_photo_reviews[step_id] = PendingPhotoReview(
-            image_bytes=image_bytes,
-            mime_type=mime_type,
-            source_uri=str(source_uri) if source_uri else None,
-        )
-        await inject_realtime_photo_review(
-            frame.text or frame.request.text or "",
-            image_data_url,
-        )
-
     for name, handler in build_voice_function_handlers(
         session_id,
         get_pending_photo=get_pending_photo,
@@ -511,11 +436,7 @@ async def bot(runner_args: Any):
     ).items():
         llm.register_function(name, handler)
 
-    photo_capture = RequestedPhotoCaptureProcessor(
-        handle_requested_photo_frame,
-        name="RequestedPhotoCaptureProcessor",
-    )
-    pipeline = Pipeline([transport.input(), photo_capture, llm, transport.output()])
+    pipeline = Pipeline([transport.input(), llm, transport.output()])
     task = PipelineTask(
         pipeline,
         params=PipelineParams(
@@ -586,12 +507,10 @@ async def bot(runner_args: Any):
         image_transfer_id = data.get("imageTransferId") or data.get("image_transfer_id")
         step_id = data.get("stepId") or data.get("step_id")
         source_uri = data.get("sourceUri") or data.get("source_uri")
-        is_photo_review = bool(
-            isinstance(image_data_url, str)
-            and image_data_url.strip()
-            or isinstance(image_transfer_id, str)
-            and image_transfer_id.strip()
-            or "CAPTURED_PHOTO_REVIEW" in cleaned_content
+        is_photo_review = is_realtime_photo_review_message(
+            content=cleaned_content,
+            image_data_url=image_data_url,
+            image_transfer_id=image_transfer_id,
         )
         logger.info(
             "Received inspection-control session_id={} has_photo={} preview={!r}",
@@ -626,12 +545,8 @@ async def bot(runner_args: Any):
                         image_data_url.strip(),
                     )
                 else:
-                    await task.queue_frame(
-                        build_realtime_photo_request_frame(
-                            content=cleaned_content,
-                            source_uri=str(source_uri) if source_uri else None,
-                            step_id=review_step_id,
-                        )
+                    raise ValueError(
+                        "Captured photo review requires an uploaded image payload"
                     )
             else:
                 await rtvi.send_server_message(

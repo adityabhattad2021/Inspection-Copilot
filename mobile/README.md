@@ -32,7 +32,8 @@ Expo React Native app for the Cars24 Jockey Copilot hackathon prototype. The app
 - `src/features/lookup/*` owns registration lookup, vehicle-found navigation, and 3D model display.
 - `src/features/inspection/inspection-screen.tsx` owns the live inspection workflow.
 - `src/features/inspection/pipecat-voice-boundary.ts` owns the Pipecat realtime voice boundary.
-- `src/features/inspection/realtime-frame-capture.ts` bridges native Android frame capture.
+- `src/features/inspection/realtime-camera-screen.tsx` owns the VisionCamera preview and still capture UI.
+- `src/features/inspection/vision-camera-photo-capture.ts` encodes captured JPEG bytes for the Pipecat realtime photo review path.
 - `src/features/inspection/inspection-debug-log.ts` persists dev-only inspection flow logs to the backend.
 - `src/data/live-inspection-media.ts` contains deterministic sample frames for the sample fallback flow.
 - `src/components/ui/*` contains shared operational UI primitives.
@@ -77,7 +78,7 @@ To build and run the Android development client:
 make mobile-android
 ```
 
-The app uses Expo SDK 54, Expo Router, React Native 0.81, Daily/Pipecat realtime voice packages, and a local Android native module for realtime frame capture. Expo Go is not sufficient for the full camera/voice demo because this app needs native modules and dev-client configuration.
+The app uses Expo SDK 54, Expo Router, React Native 0.81, Daily/Pipecat realtime voice packages, and React Native VisionCamera for inspection photo capture. Expo Go is not sufficient for the full camera/voice demo because this app needs native modules and dev-client configuration.
 
 ## Environment Variables
 
@@ -122,13 +123,7 @@ Do not commit real secrets.
 
 ## Realtime Voice And Camera Notes
 
-The inspection screen talks to the backend voice runtime through Pipecat Small WebRTC. The backend sends server messages for frame interventions and capture commands. The mobile boundary handles these events, speaks the exact guidance through `SYSTEM_GUIDANCE`, and triggers capture when the backend reports a hold/ready decision.
-
-The Android frame capture module stores captured realtime frames locally and uploads them as multipart evidence to:
-
-```text
-POST /evidence/photo
-```
+The inspection screen talks to the backend voice runtime through Pipecat Small WebRTC. Pipecat owns the voice session, while VisionCamera owns the inspection camera preview and still photo capture. Captured JPEG bytes are encoded as a `data:image/jpeg;base64,...` payload and sent through the existing `inspection-control` Pipecat client-message path, so the image reaches the model in the same realtime session.
 
 Sample media mode still uses the same typed API client path where possible, but deterministic sample keys drive the fallback guidance:
 

@@ -1,9 +1,14 @@
 import type { VehicleProfile } from "@/src/api/client";
 import { KENNEY_SEDAN_SILVER_MODEL_DATA_URI } from "@/src/features/lookup/kenney-sedan-silver-model-data";
+import { KENNEY_SUV_RED_MODEL_DATA_URI } from "@/src/features/lookup/kenney-suv-red-model-data";
 import { KENNEY_SUV_TEAL_MODEL_DATA_URI } from "@/src/features/lookup/kenney-suv-teal-model-data";
 import { KENNEY_SUV_WHITE_MODEL_DATA_URI } from "@/src/features/lookup/kenney-suv-white-model-data";
 
-export type VehicleModelVariant = "sedan-silver" | "suv-teal" | "suv-white";
+export type VehicleModelVariant =
+  | "sedan-silver"
+  | "suv-red"
+  | "suv-teal"
+  | "suv-white";
 
 export type VehicleModelAsset = {
   modelUri: string;
@@ -16,6 +21,11 @@ const MODEL_ASSETS = {
     modelUri: KENNEY_SEDAN_SILVER_MODEL_DATA_URI,
     paintName: "Silver",
     variant: "sedan-silver",
+  },
+  "suv-red": {
+    modelUri: KENNEY_SUV_RED_MODEL_DATA_URI,
+    paintName: "Red",
+    variant: "suv-red",
   },
   "suv-teal": {
     modelUri: KENNEY_SUV_TEAL_MODEL_DATA_URI,
@@ -31,6 +41,7 @@ const MODEL_ASSETS = {
 
 const REGISTRATION_VARIANTS: Record<string, VehicleModelVariant> = {
   DL8CAF5031: "sedan-silver",
+  HR98E5819: "suv-red",
   KA03MX2147: "suv-white",
   KA05NB7777: "suv-teal",
 };

@@ -8,14 +8,14 @@ The backend demo deployment is an EC2-hosted FastAPI Docker service backed by Dy
 
 | Area | Current Choice | Why It Exists |
 |---|---|---|
-| Mobile app | Expo React Native Android development build | Native Android demo with microphone, camera, WebRTC, and a custom frame-capture module |
+| Mobile app | Expo React Native Android development build | Native Android demo with microphone, VisionCamera photo capture, and Pipecat voice transport |
 | Navigation | Expo Router | Small route surface: onboarding, lookup, vehicle confirmation, inspection |
-| Camera | Pipecat Small WebRTC local camera track rendered with `RTCView` | The realtime voice session owns camera/mic transport, and the app captures the visible RTC view when needed |
-| Frame capture | Android native `RealtimeFrameCaptureModule` | Captures the rendered realtime camera frame as a JPEG for photo review and evidence |
+| Camera | React Native VisionCamera preview and still capture | Still photos need clearer evidence than the Pipecat WebRTC camera frame can provide |
+| Photo handoff | VisionCamera JPEG encoded as a Pipecat RTVI client message | The captured image enters the same realtime model session through the existing `inspection-control` image transfer path |
 | Backend hosting | FastAPI in Docker on EC2 | Simple deployed backend service, no Lambda/Mangum/API Gateway in the current deployment |
 | Persistence | DynamoDB backend adapter | EC2 service remains stateless; session, plan, evidence metadata, observations, interventions, profiles, and reports live in DynamoDB |
 | Media storage | S3 evidence bucket | Stores photo evidence when `JOCKEY_COPILOT_S3_BUCKET` is configured; presigned uploads are also available |
-| Voice runtime | Pipecat Small WebRTC backend bot | Keeps realtime LLM keys on the backend and streams voice/camera through the backend-controlled runtime |
+| Voice runtime | Pipecat Small WebRTC backend bot | Keeps realtime LLM keys on the backend and streams voice through the backend-controlled runtime |
 | Voice LLM | Gemini Live by default, OpenAI Realtime rollback | Backend can switch providers through `VOICE_LLM_PROVIDER` without changing mobile code |
 | Vehicle data | Seeded demo vehicles | Stable hackathon path with the same interface a real RC/Cars24 provider could replace |
 | Report output | FastAPI report JSON/HTML endpoints backed by DynamoDB | Completion creates report metadata and serves pricing/audit report views from the backend |
@@ -56,7 +56,7 @@ flowchart LR
     Inspection["Inspection screen<br/>voice, camera, progress, engine Q&A"]
     ApiClient["Typed API client<br/>src/api/client.ts"]
     VoiceBoundary["Pipecat voice boundary<br/>Small WebRTC client"]
-    FrameCapture["Android frame capture module"]
+    VisionCamera["VisionCamera preview<br/>and JPEG capture"]
     Cache["AsyncStorage<br/>cached profile"]
     DebugClient["Dev flow logger"]
   end
@@ -98,7 +98,7 @@ flowchart LR
   Found --> ApiClient
   Inspection --> ApiClient
   Inspection <--> VoiceBoundary
-  Inspection --> FrameCapture
+  Inspection --> VisionCamera
   DebugClient --> Debug
 
   ApiClient --> Profiles
@@ -148,10 +148,10 @@ flowchart TD
   InspectionRoute --> InspectionScreen["InspectionScreen"]
   InspectionScreen --> VoiceRuntime["GET /voice/config<br/>connect Pipecat"]
   InspectionScreen --> StartSession["POST /sessions/{id}/start"]
-  InspectionScreen --> RealtimeCamera["RealtimeCameraScreen<br/>RTCView"]
+  InspectionScreen --> RealtimeCamera["RealtimeCameraScreen<br/>VisionCamera"]
   InspectionScreen --> EngineCheck["EngineGuidedCheck"]
   InspectionScreen --> Complete["POST /sessions/{id}/complete"]
-  RealtimeCamera --> NativeCapture["captureRealtimeFrame(viewTag)"]
+  RealtimeCamera --> PhotoCapture["capture JPEG<br/>encode data URL"]
   Complete --> BackToLookup["Return to lookup"]
 ```
 
@@ -172,7 +172,7 @@ flowchart LR
     Inspection["inspection/inspection-screen.tsx"]
     VoiceBoundary["inspection/pipecat-voice-boundary.ts"]
     CameraScreen["inspection/realtime-camera-screen.tsx"]
-    FrameCapture["inspection/realtime-frame-capture.ts"]
+    PhotoCapture["inspection/vision-camera-photo-capture.ts"]
     Engine["inspection/engine-guided-check.tsx"]
     DebugLog["inspection/inspection-debug-log.ts"]
   end
@@ -190,7 +190,7 @@ flowchart LR
   InspectionRoute --> Inspection
   Inspection --> VoiceBoundary
   Inspection --> CameraScreen
-  Inspection --> FrameCapture
+  Inspection --> PhotoCapture
   Inspection --> Engine
   Inspection --> DebugLog
   Inspection --> Media
@@ -327,7 +327,7 @@ sequenceDiagram
     Voice->>LLM: Step instructions and expected parts
     LLM-->>App: Short spoken framing instruction
     J->>App: Tap capture
-    App->>App: Capture RTCView frame through native Android module
+    App->>App: Capture VisionCamera JPEG still
     App->>Voice: CAPTURED_PHOTO_REVIEW with JPEG data chunks
     Voice->>LLM: Review captured still photo
     alt Photo is acceptable
@@ -363,8 +363,7 @@ sequenceDiagram
 sequenceDiagram
   autonumber
   participant App as InspectionScreen
-  participant RTC as RTCView camera preview
-  participant Native as Android frame capture
+  participant Camera as VisionCamera preview
   participant VoiceClient as Pipecat client
   participant Bot as FastAPI Pipecat bot
   participant LLM as Gemini/OpenAI realtime model
@@ -375,9 +374,9 @@ sequenceDiagram
   VoiceClient->>Bot: inspection-control message
   Bot->>LLM: Inject lifecycle text
   LLM-->>VoiceClient: Speak next camera action
-  App-->>RTC: Render local camera track
-  App->>Native: captureVideoViewFrame(viewTag)
-  Native-->>App: JPEG uri, bytes, width, height, dataUrl
+  App-->>Camera: Render back camera preview
+  App->>Camera: capturePhoto()
+  Camera-->>App: JPEG bytes, temp file URI, width, height
   App->>VoiceClient: Send image chunks + CAPTURED_PHOTO_REVIEW
   VoiceClient->>Bot: inspection-control-photo-chunk messages
   Bot->>Bot: Reassemble data URL and keep pending photo by stepId

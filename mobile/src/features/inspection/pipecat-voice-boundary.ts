@@ -1,15 +1,11 @@
 import type {
   BotOutputData,
-  Participant,
   PipecatClient as PipecatClientInstance,
   PipecatClientOptions,
   RTVIMessage,
   TranscriptData,
 } from "@pipecat-ai/client-js";
-import type {
-  MediaDeviceInfo,
-  MediaStreamTrack as DailyMediaStreamTrack,
-} from "@daily-co/react-native-webrtc";
+import type { MediaDeviceInfo } from "@daily-co/react-native-webrtc";
 import type { RNSmallWebRTCTransport as RNSmallWebRTCTransportInstance } from "@pipecat-ai/react-native-small-webrtc-transport";
 import type {
   InspectionSession,
@@ -65,10 +61,6 @@ export type InspectionVoiceEvent =
       resultType: string;
       session: InspectionSession;
       type: "voice-session-updated";
-    }
-  | {
-      type: "local-video-track";
-      videoTrack: DailyMediaStreamTrack | null;
     }
   | {
       type: "voice-ready";
@@ -237,34 +229,10 @@ function getVoiceSessionUpdate(data: unknown): {
   };
 }
 
-function isLocalParticipant(participant?: Participant) {
-  return Boolean(participant?.local);
-}
-
 function wait(milliseconds: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
   });
-}
-
-function getTrackFacingMode(track: DailyMediaStreamTrack) {
-  const settingsFacingMode = track.getSettings().facingMode;
-  if (settingsFacingMode) {
-    return settingsFacingMode;
-  }
-
-  try {
-    return String(track._getCameraFacingMode?.() ?? "");
-  } catch {
-    return "";
-  }
-}
-
-function selectBackCamera(cameras: readonly MediaDeviceInfo[]) {
-  return (
-    cameras.find((camera) => /back|rear|environment/i.test(camera.label)) ??
-    null
-  );
 }
 
 const ANDROID_SPEAKERPHONE_DEVICE_ID = "SPEAKERPHONE";
@@ -332,69 +300,6 @@ function createNativePipecatVoiceDriver(
   let nativeTransport: RNSmallWebRTCTransportInstance | null = null;
   let botTranscript = "";
   let isBotSpeaking = false;
-
-  function emitLocalVideoTrack() {
-    const videoTrack = (nativeTransport?.tracks().local.video ??
-      null) as DailyMediaStreamTrack | null;
-    onEvent({ type: "local-video-track", videoTrack });
-  }
-
-  async function preferBackCamera() {
-    if (!nativeTransport) {
-      return;
-    }
-
-    const videoTrack = nativeTransport.tracks().local
-      .video as DailyMediaStreamTrack | undefined;
-    logInspectionRtvi("prefer-back-camera:start", {
-      facingMode: videoTrack ? getTrackFacingMode(videoTrack) : null,
-      hasVideoTrack: Boolean(videoTrack),
-    });
-
-    if (videoTrack) {
-      try {
-        await videoTrack.applyConstraints({ facingMode: "environment" });
-        logInspectionRtvi("prefer-back-camera:constraints-applied", {
-          facingMode: getTrackFacingMode(videoTrack),
-        });
-      } catch {
-        // Some Android WebRTC builds ignore facingMode constraints. We fall
-        // through to the explicit camera switch/device selection below.
-        logInspectionRtvi("prefer-back-camera:constraints-ignored");
-      }
-
-      if (getTrackFacingMode(videoTrack) === "environment") {
-        emitLocalVideoTrack();
-        logInspectionRtvi("prefer-back-camera:already-environment");
-        return;
-      }
-
-      if (getTrackFacingMode(videoTrack) === "user") {
-        videoTrack._switchCamera();
-        await wait(300);
-        emitLocalVideoTrack();
-        logInspectionRtvi("prefer-back-camera:switch-camera", {
-          facingMode: getTrackFacingMode(videoTrack),
-        });
-        if (getTrackFacingMode(videoTrack) === "environment") {
-          return;
-        }
-      }
-    }
-
-    const backCamera = selectBackCamera(await nativeTransport.getAllCams());
-    if (backCamera) {
-      nativeTransport.updateCam(backCamera.deviceId);
-      await wait(450);
-      emitLocalVideoTrack();
-      logInspectionRtvi("prefer-back-camera:update-cam", {
-        deviceId: backCamera.deviceId,
-        label: backCamera.label,
-      });
-    } else {
-      logInspectionRtvi("prefer-back-camera:no-back-camera-found");
-    }
-  }
 
   async function preferSpeakerphone() {
     if (!nativeTransport) {
@@ -608,18 +513,6 @@ function createNativePipecatVoiceDriver(
               type: message.type,
             });
           },
-          onTrackStarted: (_track, participant?: Participant) => {
-            if (isLocalParticipant(participant)) {
-              logInspectionRtvi("local-track-started");
-              emitLocalVideoTrack();
-            }
-          },
-          onTrackStopped: (_track, participant?: Participant) => {
-            if (isLocalParticipant(participant)) {
-              logInspectionRtvi("local-track-stopped");
-              emitLocalVideoTrack();
-            }
-          },
           onTransportStateChanged: (state) => {
             logInspectionRtvi("transport-state", state);
           },
@@ -629,15 +522,13 @@ function createNativePipecatVoiceDriver(
             }
           },
         },
-        enableCam: true,
+        enableCam: false,
         enableMic: true,
         transport,
       });
 
       await client.initDevices();
       await preferSpeakerphone();
-      await preferBackCamera();
-      emitLocalVideoTrack();
       await client.startBotAndConnect({
         endpoint: request.startUrl,
         requestData: {
@@ -645,14 +536,12 @@ function createNativePipecatVoiceDriver(
         },
       });
       await preferSpeakerphone();
-      emitLocalVideoTrack();
     },
     async disconnect() {
       logInspectionRtvi("disconnect");
       await client?.disconnect();
       client = null;
       nativeTransport = null;
-      onEvent({ type: "local-video-track", videoTrack: null });
     },
     async sendControlEvent(text: string, options) {
       sendInspectionControlMessage(`SYSTEM_EVENT: ${text}`, options);
