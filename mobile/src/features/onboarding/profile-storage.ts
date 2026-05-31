@@ -5,7 +5,7 @@ import {
   type SavedJockeyProfile,
 } from "@/src/features/onboarding/profile";
 
-const PROFILE_CACHE_KEY = "jockey-copilot.profile.v1";
+const PROFILE_CACHE_KEY = "inspection-copilot.profile.v1";
 
 export async function getCachedProfile(): Promise<SavedJockeyProfile | null> {
   const rawValue = await AsyncStorage.getItem(PROFILE_CACHE_KEY);

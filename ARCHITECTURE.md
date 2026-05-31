@@ -1,6 +1,6 @@
-# ARCHITECTURE: Cars24 Jockey Copilot
+# ARCHITECTURE: Inspection Copilot
 
-This document describes the current implementation state of the hackathon app.
+This document describes the current implementation state of the portfolio app.
 
 The backend demo deployment is an EC2-hosted FastAPI Docker service backed by DynamoDB and an S3 evidence bucket. The code still contains local SQLite/filesystem adapters for local development and tests, but the current backend architecture should be read as EC2 + DynamoDB + S3.
 
@@ -17,7 +17,7 @@ The backend demo deployment is an EC2-hosted FastAPI Docker service backed by Dy
 | Media storage | S3 evidence bucket | Stores photo evidence when `JOCKEY_COPILOT_S3_BUCKET` is configured; presigned uploads are also available |
 | Voice runtime | Pipecat Small WebRTC backend bot | Keeps realtime LLM keys on the backend and streams voice through the backend-controlled runtime |
 | Voice LLM | Gemini Live by default, OpenAI Realtime rollback | Backend can switch providers through `VOICE_LLM_PROVIDER` without changing mobile code |
-| Vehicle data | Seeded demo vehicles | Stable hackathon path with the same interface a real RC/Cars24 provider could replace |
+| Vehicle data | Seeded demo vehicles | Stable demo path with the same interface a real RC/vehicle data provider could replace |
 | Report output | FastAPI report JSON/HTML endpoints backed by DynamoDB | Completion creates report metadata and serves pricing/audit report views from the backend |
 
 ## Deployment Architecture
@@ -45,7 +45,7 @@ flowchart LR
 ```mermaid
 flowchart LR
   subgraph Field["Inspection site"]
-    J["Car Jockey"]
+    J["car inspector"]
     Car["Used car"]
   end
 
@@ -277,7 +277,7 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   autonumber
-  actor J as Car Jockey
+  actor J as car inspector
   participant App as Expo Android app
   participant Cache as AsyncStorage
   participant API as FastAPI on EC2
@@ -535,7 +535,7 @@ flowchart TD
 | Endpoint | Owner | Current role |
 |---|---|---|
 | `GET /health` | `app/main.py` | EC2/container health check |
-| `POST /profiles` | `routes/profiles.py` | Create Jockey profile |
+| `POST /profiles` | `routes/profiles.py` | Create inspector profile |
 | `GET /profiles` | `routes/profiles.py` | List profiles |
 | `GET /profiles/{profileId}` | `routes/profiles.py` | Refresh cached mobile profile |
 | `POST /vehicles/lookup` | `routes/vehicles.py` | Lookup seeded demo registration |

@@ -1,7 +1,7 @@
-# Jockey Copilot
+# Inspection Copilot
 
 
-Cars24 Jockey Copilot is a hackathon prototype for a live, voice-and-vision assisted vehicle inspection app. It helps a Car Jockey move through a focused Cars24-style inspection flow, gives realtime camera guidance, captures evidence, structures spoken observations, guides the engine-sound check, and submits the inspection for pricing and audit.
+Inspection Copilot is a portfolio prototype for a live, voice-and-vision assisted vehicle inspection app. It helps a car inspector move through a focused structured inspection flow, gives realtime camera guidance, captures evidence, structures spoken observations, guides the engine-sound check, and submits the inspection for pricing and audit.
 
 The prototype is intentionally demo-first: local FastAPI backend, Expo React Native Android development build, deterministic demo vehicles and inspection plan, local SQLite state, local evidence files, and realtime voice routed through the backend so mobile never stores AI keys.
 
@@ -29,14 +29,14 @@ The prototype is intentionally demo-first: local FastAPI backend, Expo React Nat
 
 ## What It Demonstrates
 
-- Jockey onboarding with language selection.
+- Inspector onboarding with language selection.
 - Demo registration lookup for known vehicles.
 - Dynamic five-step inspection plan.
 - Realtime voice-guided camera flow.
 - Frame intervention events such as adjust, hold, and capture.
 - Photo evidence save path for sample and realtime captures.
 - Structured LHS door damage observation from natural language.
-- Guided engine-sound check based on Jockey answers.
+- Guided engine-sound check based on inspector answers.
 - Dev-only inspection flow logging for debugging the live demo.
 
 ## Demo Vehicles
@@ -59,7 +59,7 @@ The demo plan has five focused steps:
 4. Dashboard and odometer reading
 5. Engine sound condition
 
-Photo steps can auto-capture after the realtime voice agent reports a hold/ready decision. The LHS front door step captures photo evidence only. The engine step guides the Jockey through idle, gentle rev, exhaust listening, and final answer submission.
+Photo steps can auto-capture after the realtime voice agent reports a hold/ready decision. The LHS front door step captures photo evidence only. The engine step guides the inspector through idle, gentle rev, exhaust listening, and final answer submission.
 
 ## Repository Layout
 
@@ -69,10 +69,9 @@ Photo steps can auto-capture after the realtime voice agent reports a hold/ready
 |-- mobile/                  Expo React Native app and Android dev client
 |-- ARCHITECTURE.md          System and module diagrams
 |-- PRD.md                   Product requirements and scope
-|-- GOALS.md                 Hackathon goals and demo script
-|-- SPRINTS.md               Task ownership, acceptance commands, boundaries
+|-- GOALS.md                 Product goals and demo script
 |-- Makefile                 Root commands for backend, mobile, and Android
-`-- inspection-question.pdf  Cars24 inspection schema reference
+`-- backend/app/database/seed_data.py  Demo vehicles and sample inspection plan
 ```
 
 ## Backend
@@ -83,7 +82,7 @@ Important backend modules:
 
 - `backend/app/main.py` wires the route modules.
 - `backend/app/routes/vehicles.py` handles demo registration lookup.
-- `backend/app/routes/profiles.py` handles Jockey profile persistence.
+- `backend/app/routes/profiles.py` handles inspector profile persistence.
 - `backend/app/routes/sessions.py` creates, starts, reads, and completes inspection sessions.
 - `backend/app/routes/ai.py` handles live-frame analysis, observation structuring, and engine checks.
 - `backend/app/routes/evidence.py` stores sample or realtime photo evidence.
@@ -98,7 +97,7 @@ The mobile app is an Expo SDK 54 React Native app intended for an Android develo
 
 Important mobile modules:
 
-- `mobile/app/onboarding.tsx` creates the Jockey profile.
+- `mobile/app/onboarding.tsx` creates the inspector profile.
 - `mobile/app/index.tsx` loads the profile and shows registration lookup.
 - `mobile/app/vehicle-found.tsx` shows the found vehicle and starts a session.
 - `mobile/app/inspection/[sessionId].tsx` renders the live inspection route.
@@ -249,17 +248,17 @@ make clean
 2. Run `make android-ready` so Android `localhost:8000` points to the computer.
 3. Start the Expo dev-client server.
 4. Open the Android dev client.
-5. Create a Jockey profile and choose a language.
+5. Create an inspector profile and choose a language.
 6. Look up `KA03MX2147`.
 7. Confirm the vehicle and start inspection.
 8. Follow the voice guidance through Front Main, LHS front door, Rear Main, Dashboard/Odometer, and Engine Sound.
 9. Submit the inspection after the engine answer.
 
-The current mobile app returns to lookup after submission. External report generation is a later backend/dashboard concern in the sprint plan.
+The current mobile app returns to lookup after submission. External report generation is handled by the backend/dashboard surface.
 
 ## Verification
 
-Use the relevant sprint acceptance command before claiming a task is done:
+Use the relevant acceptance command before claiming a task is done:
 
 ```bash
 make backend-test
@@ -284,7 +283,7 @@ make mobile-android
 
 ## Project Docs
 
-- [GOALS.md](GOALS.md) explains the hack thesis and demo script.
+- [GOALS.md](GOALS.md) explains the product thesis and demo script.
 - [PRD.md](PRD.md) defines product scope, goals, and non-goals.
 - [ARCHITECTURE.md](ARCHITECTURE.md) shows system diagrams and module maps.
 - [mobile/README.md](mobile/README.md) documents the mobile app in detail.

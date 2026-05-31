@@ -1168,7 +1168,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
             "INSPECTION_COMPLETED.",
             `Status: ${completed.status}.`,
             `Completed steps: ${completed.completedStepCount}.`,
-            "Thank the jockey in your own short words.",
+            "Thank the inspector in your own short words.",
           ].join(" "),
         ).catch((error) => {
           resolveCompletionSpeechWait("completion_send_failed");

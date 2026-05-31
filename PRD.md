@@ -1,14 +1,14 @@
-# PRD: Cars24 Jockey Copilot
+# PRD: Inspection Copilot
 
 ## Product Summary
 
-Cars24 Jockey Copilot is a real-time voice-and-vision assistant embedded inside the Car Jockey inspection app. It helps the inspector complete Cars24's structured inspection checklist hands-free, validates photo evidence while the car is still in front of them, guides engine-sound inspection, and produces a cleaner report for pricing and audit teams outside the mobile app.
+Inspection Copilot is a real-time voice-and-vision assistant for used-car field inspections. It helps an inspector complete a structured inspection checklist hands-free, validates photo evidence while the car is still in front of them, guides engine-sound inspection, and produces a cleaner report for pricing and audit workflows outside the mobile app.
 
-The hackathon build focuses on a live mobile inspection flow, not a full replacement for Cars24's existing inspection system.
+The demo build focuses on a live mobile inspection flow, not a full replacement for a production inspection platform.
 
 ## Problem
 
-Cars24 inspections directly affect final seller offers, dealer confidence, resale margins, and buyer trust. The existing inspection workflow is structured, but quality still depends on the Car Jockey's training, attention, camera discipline, and ability to fill many fields accurately while physically inspecting the car.
+Vehicle inspections directly affect final seller offers, dealer confidence, resale margins, and buyer trust. The existing inspection workflow is structured, but quality still depends on the car inspector's training, attention, camera discipline, and ability to fill many fields accurately while physically inspecting the car.
 
 Bad inspection data can show up as:
 
@@ -24,7 +24,7 @@ The opportunity is to move quality control from after-the-fact audit to real-tim
 
 ## Target User
 
-Primary user: Cars24 Car Jockey / car inspector performing seller-side vehicle inspection.
+Primary user: a field inspector performing seller-side vehicle inspection.
 
 Secondary users:
 
@@ -36,13 +36,13 @@ Secondary users:
 
 ## User Story
 
-A Car Jockey reaches a seller's home and opens the inspection app. They enter the vehicle registration number. The app fetches or simulates vehicle details, such as make, model, year, fuel type, transmission, body type, and variant.
+A car inspector reaches a seller's home and opens the inspection app. They enter the vehicle registration number. The app fetches or simulates vehicle details, such as make, model, year, fuel type, transmission, body type, and variant.
 
-The app converts the vehicle profile into an inspection plan based on Cars24's inspection-question schema. The AI copilot starts guiding the Jockey:
+The app converts the vehicle profile into an inspection plan based on a sample inspection schema. The AI copilot starts guiding the inspector:
 
 "Inspection started for a 2020 Hyundai Creta SX Petrol Automatic. We'll begin with Exterior & Tyres. Field 21: Front Main. Show the full front bumper, bonnet line, headlight, and front-left tyre."
 
-The Jockey points the camera at the car. The copilot watches the frame and responds in real time:
+The inspector points the camera at the car. The copilot watches the frame and responds in real time:
 
 "Move two steps back. The front bumper is cropped."
 
@@ -60,31 +60,31 @@ The copilot continues through selected checklist fields. It detects capture-qual
 - Field: LHS front door
 - Evidence: image attached
 
-For engine sound, the copilot guides the Jockey through the actual inspection: start the engine, listen at idle, briefly rev, listen near the bonnet and exhaust, then answer targeted questions such as whether there is knocking, rattling, abnormal vibration, smoke, or delayed start. The app can optionally record audio as an evidence artifact, and AI can mark whether that recording is usable, but the primary inspection signal is the Jockey's guided observation.
+For engine sound, the copilot guides the inspector through the actual inspection: start the engine, listen at idle, briefly rev, listen near the bonnet and exhaust, then answer targeted questions such as whether there is knocking, rattling, abnormal vibration, smoke, or delayed start. The app can optionally record audio as an evidence artifact, and AI can mark whether that recording is usable, but the primary inspection signal is the inspector's guided observation.
 
 At the end, the mobile app submits the inspection. The backend produces an AI Inspection Quality Report as `report.html` and `report.json` for an ops dashboard, and can optionally send the report link by email. The mobile app only needs to show submission status and report-link metadata.
 
 ## Product Goals
 
-- Make the inspection feel like a senior Car Jockey is coaching every inspector in real time.
-- Use Cars24's real inspection-question categories rather than inventing a generic checklist.
+- Make the inspection feel like a senior car inspector is coaching every inspector in real time.
+- Use realistic inspection categories rather than inventing a generic checklist.
 - Demonstrate live voice, camera, image analysis, guided engine inspection, optional audio evidence, and structured report generation in one end-to-end flow.
 - Demonstrate live framing guidance with auto-capture when the car angle is correct.
-- Show business impact for Cars24: fewer re-inspections, better evidence, better pricing confidence, and more consistent inspections across cities.
-- Build a complete, reliable hackathon demo within 24 hours.
+- Show business impact for inspection operations: fewer re-inspections, better evidence, better pricing confidence, and more consistent inspections across locations.
+- Build a complete, reliable portfolio demo as a compact end-to-end prototype.
 
 ## Non-Goals
 
 - Do not build a full 133-field production inspection app.
 - Do not claim full mechanical diagnosis.
 - Do not train a dent/scratch detection model from scratch.
-- Do not integrate with real VAHAN/Cars24 internal APIs during the hack unless credentials are immediately available.
+- Do not integrate with real VAHAN or internal APIs for the portfolio prototype.
 - Do not build buyer-side PDI, payment, RC transfer, or auction workflows.
 - Do not build a full native production release pipeline.
 
-## Cars24 Inspection Schema Anchor
+## Inspection Schema Anchor
 
-The sample `inspection-question.pdf` includes 133 fields across:
+The portfolio prototype keeps a focused sample inspection schema in `backend/app/database/seed_data.py`. It models realistic vehicle-inspection sections across:
 
 - Car Details
 - Exterior & Tyres
@@ -94,7 +94,7 @@ The sample `inspection-question.pdf` includes 133 fields across:
 - SSB: Steering, Suspension, Brakes
 - Additional options
 
-The hackathon demo should use a focused subset of this schema:
+The portfolio demo should use a focused subset of this schema:
 
 ### Car Details
 
@@ -146,7 +146,7 @@ For the live demo, complete only the critical path fields needed to show the cop
 
 ### 1. Vehicle Lookup And Dynamic Inspection Plan
 
-The Jockey enters a registration number. The app returns a mocked vehicle profile:
+The inspector enters a registration number. The app returns a mocked vehicle profile:
 
 - make
 - model
@@ -170,11 +170,11 @@ The plan affects:
 - which body angles are required
 - which engine/transmission questions are asked
 
-Production note: this can later connect to Cars24's valuation stack, RC lookup, or approved VAHAN/RC verification providers.
+Production note: this can later connect to a valuation stack, RC lookup, or approved VAHAN/RC verification providers.
 
 ### 2. Live Voice Copilot
 
-The copilot speaks instructions and listens to the Jockey hands-free.
+The copilot speaks instructions and listens to the inspector hands-free.
 
 Required behaviors:
 
@@ -251,11 +251,11 @@ When ready:
 
 ### 4. Voice-To-Form Filling
 
-During the guided engine check, the Jockey can answer in natural language. The app converts the utterance into fields from the inspection schema.
+During the guided engine check, the inspector can answer in natural language. The app converts the utterance into fields from the inspection schema.
 
 Example:
 
-Jockey says: "No knocking, no rattling, mild vibration, exhaust normal."
+Inspector says: "No knocking, no rattling, mild vibration, exhaust normal."
 
 Structured result:
 
@@ -273,7 +273,7 @@ Structured result:
 
 ### 5. Guided Engine Sound Check
 
-The app guides the Jockey through engine-sound inspection and turns the Jockey's answers into structured Cars24 engine fields.
+The app guides the inspector through engine-sound inspection and turns the inspector's answers into structured engine fields.
 
 Guided phases:
 
@@ -285,19 +285,19 @@ Guided phases:
 
 Optional audio evidence:
 
-- record engine sound while the Jockey listens
+- record engine sound while the inspector listens
 - check duration, volume, clipping, and background noise
 - attach recording to the inspection as evidence
 - do not block the inspection if audio recording is unavailable
 
-The app does not claim complete engine diagnosis. It standardizes how the Jockey listens, what they look for, and how those observations are captured.
+The app does not claim complete engine diagnosis. It standardizes how the inspector listens, what they look for, and how those observations are captured.
 
 Example outputs:
 
 - "Listen at idle for ten seconds. Do you hear knocking or metallic rattling?"
 - "Now rev once gently and return to idle."
 - "Engine sound marked normal. Optional audio evidence attached."
-- "Audio evidence is noisy, but Jockey answers are saved."
+- "Audio evidence is noisy, but inspector answers are saved."
 
 ### 6. AI Inspection Quality Report
 
@@ -324,11 +324,11 @@ Report sections:
 - pricing-risk notes
 - AI intervention audit trail
 
-The report should make the business value obvious to Cars24 judges without requiring the mobile app to become a report viewer.
+The report should make the business value obvious to product reviewers without requiring the mobile app to become a report viewer.
 
 ## Technical Approach
 
-### Recommended Hack Stack
+### Recommended Product Stack
 
 - Expo React Native app for the mobile inspection experience.
 - React Native VisionCamera for live guidance camera and auto-capture.
@@ -358,7 +358,7 @@ The demo and product story remain the same.
 3. App loads vehicle profile: 2020 Hyundai Creta SX Petrol Automatic.
 4. Copilot generates "SUV Petrol Automatic Inspection Plan."
 5. Front Main:
-   - Jockey points camera at car
+   - inspector points camera at car
    - copilot says "move a little left" or "step back"
    - when the correct angle is visible, copilot says "good, hold still"
    - app auto-captures and accepts
@@ -368,8 +368,8 @@ The demo and product story remain the same.
    - copilot asks to increase light or move closer
    - app accepts odometer evidence
 8. Guided Engine Sound Check:
-   - copilot tells Jockey how long to listen and where
-   - Jockey answers knocking/rattling/vibration questions
+   - copilot tells inspector how long to listen and where
+   - inspector answers knocking/rattling/vibration questions
    - optional audio evidence is attached
 9. Submit Inspection:
    - mobile app shows submitted status
@@ -377,17 +377,17 @@ The demo and product story remain the same.
 10. External Report:
    - dashboard or HTML report shows quality score
    - shows intervention trail
-   - shows structured Cars24 checklist fields
+   - shows structured checklist fields
    - shows business impact summary
 
 ## Success Metrics For Demo
 
-- Judge can understand the user and business problem in under 60 seconds.
+- A reviewer can understand the user and business problem in under 60 seconds.
 - Live copilot visibly intervenes at least 3 times.
 - At least one voice answer becomes a structured checklist field.
 - At least one image is rejected and then accepted after guidance.
-- Engine-sound check guides the Jockey and structures their answers.
-- External report maps back to Cars24 inspection categories.
+- Engine-sound check guides the inspector and structures their answers.
+- External report maps back to inspection categories.
 - Demo works reliably without depending on unstable external vehicle lookup.
 
 ## Risks And Mitigations

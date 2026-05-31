@@ -356,7 +356,7 @@ function OnboardingChrome({
 function NarrativeStep() {
   return (
     <View style={{ gap: spacing.lg }}>
-      <StatusPill label="Cars24 Jockey Copilot" tone="ai" />
+      <StatusPill label="Inspection Copilot" tone="ai" />
       <View style={{ gap: spacing.md }}>
         <Text
           selectable
@@ -389,7 +389,7 @@ function NameStep({ jockeyName, onChangeName }: NameStepProps) {
     <View style={{ gap: spacing.lg }}>
       <View style={{ gap: spacing.sm }}>
         <Text selectable style={typography.eyebrow}>
-          Jockey profile
+          Inspector profile
         </Text>
         <Text
           selectable

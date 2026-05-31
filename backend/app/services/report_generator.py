@@ -459,7 +459,7 @@ def render_report_html(report: dict[str, Any]) -> str:
 <main>
   <section class="hero">
     <div class="hero-top">
-      <strong>Cars24 Jockey Copilot</strong>
+      <strong>Inspection Copilot</strong>
       <div class="hero-actions">
         <span>{escape(_format_timestamp(report["generatedAt"]))}</span>
         <a class="report-button" href="{escape(download_url)}">Download HTML</a>

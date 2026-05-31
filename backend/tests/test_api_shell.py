@@ -263,4 +263,4 @@ def test_get_profile_rejects_unknown_profile_id():
     response = client.get("/profiles/jockey_missing")
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "Jockey profile not found"
+    assert response.json()["detail"] == "Inspector profile not found"

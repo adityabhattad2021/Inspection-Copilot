@@ -51,10 +51,10 @@ app-example
 /android/app/src/main/java/*
 !/android/app/src/main/java/com/
 /android/app/src/main/java/com/*
-!/android/app/src/main/java/com/cars24/
-/android/app/src/main/java/com/cars24/*
-!/android/app/src/main/java/com/cars24/jockeycopilot/
-/android/app/src/main/java/com/cars24/jockeycopilot/*
-!/android/app/src/main/java/com/cars24/jockeycopilot/MainApplication.kt
-!/android/app/src/main/java/com/cars24/jockeycopilot/RealtimeFrameCaptureModule.java
-!/android/app/src/main/java/com/cars24/jockeycopilot/RealtimeFrameCapturePackage.java
+!/android/app/src/main/java/com/inspectioncopilot/
+/android/app/src/main/java/com/inspectioncopilot/*
+!/android/app/src/main/java/com/inspectioncopilot/app/
+/android/app/src/main/java/com/inspectioncopilot/app/*
+!/android/app/src/main/java/com/inspectioncopilot/app/MainApplication.kt
+!/android/app/src/main/java/com/inspectioncopilot/app/RealtimeFrameCaptureModule.java
+!/android/app/src/main/java/com/inspectioncopilot/app/RealtimeFrameCapturePackage.java

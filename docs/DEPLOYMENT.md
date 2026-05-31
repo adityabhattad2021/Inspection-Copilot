@@ -50,8 +50,8 @@ The script currently targets:
 ```bash
 EC2_HOST=65.0.101.246
 EC2_USER=ubuntu
-SSH_KEY=$HOME/.ssh/cars24-jockey-hack-key.pem
-REMOTE_DIR=/home/ubuntu/cars24-jockey
+SSH_KEY=$HOME/.ssh/inspection-copilot-key.pem
+REMOTE_DIR=/home/ubuntu/inspection-copilot
 HEALTH_URL=http://65.0.101.246/health
 ```
 

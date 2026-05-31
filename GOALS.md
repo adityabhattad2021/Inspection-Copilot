@@ -1,12 +1,12 @@
-# GOALS: Cars24 Jockey Copilot Hack
+# GOALS: Inspection Copilot Product
 
-## Hack Thesis
+## Product Thesis
 
-Cars24 already has a structured vehicle inspection process. The hack is to make that process live, voice-guided, and AI-audited while the Car Jockey is still standing next to the car.
+Vehicle inspection teams already use structured checklists. Inspection Copilot makes that process live, voice-guided, and AI-audited while the inspector is still standing next to the car.
 
 The product should feel like:
 
-> Every Car Jockey now has the best senior inspector on the team riding along in their pocket.
+> Every car inspector now has the best senior inspector on the team riding along in their pocket.
 
 ## What We Are Building
 
@@ -15,40 +15,40 @@ A mobile inspection copilot that:
 - starts from a vehicle registration number
 - loads a vehicle profile
 - generates a car-specific inspection plan
-- guides the Jockey through key Cars24 inspection fields
+- guides the inspector through key inspection fields
 - watches camera captures
 - gives real-time movement and retake instructions
 - auto-captures evidence when the frame is correct and stable
 - accepts natural voice observations
-- guides engine-sound checks and structures the Jockey's answers
+- guides engine-sound checks and structures the inspector's answers
 - can attach engine audio as optional evidence
 - creates an external AI inspection quality report for dashboard/email
 
-## Winning Angle
+## Product Angle
 
 This should not be pitched as "we built another inspection checklist."
 
 The pitch is:
 
-> Cars24 already standardizes what to inspect. Jockey Copilot standardizes how well it gets captured in the field.
+> Inspection checklists standardize what to inspect. Inspection Copilot standardizes how well it gets captured in the field.
 
 That is the business wedge.
 
-## Cars24 Business Impact
+## Portfolio Value
 
 ### Direct Impact
 
 - Cleaner inspection inputs for pricing.
 - Fewer missed defects.
 - Fewer bad photos and re-inspections.
-- Faster onboarding for new Car Jockeys.
+- Faster onboarding for new car inspectors.
 - More consistent inspection quality across cities.
 - Better audit trail for disputed valuations.
 - Higher dealer trust in photo-backed reports.
 
 ### Strategic Impact
 
-- Makes Cars24 look like the AI-native used-car company.
+- Shows how multimodal AI can improve used-car inspection quality.
 - Turns a human-heavy field process into a guided AI workflow.
 - Creates reusable multimodal infrastructure for future buyer-side PDI, warranty, claims, and refurbishment workflows.
 
@@ -73,7 +73,7 @@ Nice-to-have:
 - AWS S3 evidence archive
 - QR code or phone demo build
 
-## Scope For 24 Hours
+## Portfolio Scope
 
 ### Must Have
 
@@ -112,7 +112,7 @@ Nice-to-have:
 ### Won't Have
 
 - Full 133-field inspection.
-- Real VAHAN/Cars24 internal integration.
+- Real VAHAN/internal integration.
 - Full dent detection ML model.
 - Real mechanical diagnosis from engine sound.
 - Dealer auction flow.
@@ -122,7 +122,7 @@ Nice-to-have:
 
 ### Opening
 
-"Cars24's final offer depends on inspection quality. But field inspection is hard: the Jockey is handling the car, customer, camera, app, checklist, and judgment at the same time. We built Jockey Copilot: a live senior-inspector agent inside the inspection app."
+"A vehicle's final offer depends on inspection quality. But field inspection is hard: the inspector is handling the car, customer, camera, app, checklist, and judgment at the same time. Inspection Copilot puts a live senior-inspector agent inside the inspection app."
 
 ### Step 1: Vehicle Lookup
 
@@ -186,7 +186,7 @@ Copilot says:
 
 "Start the engine. Listen near the bonnet for ten seconds. Tell me if you hear knocking, rattling, or abnormal vibration."
 
-Jockey answers:
+Inspector answers:
 
 "No knocking. Mild vibration at idle. Exhaust sounds normal."
 
@@ -196,7 +196,7 @@ Copilot follows up:
 
 Optional evidence:
 
-"Audio evidence attached, but the engine fields are based on the guided Jockey answers."
+"Audio evidence attached, but the engine fields are based on the guided inspector answers."
 
 ### Step 6: Submit And External Report
 
@@ -217,16 +217,16 @@ Dashboard/email report shows:
 
 Close:
 
-"This is not replacing the Jockey. It makes every Jockey perform like the best Jockey on the team."
+"This is not replacing the inspector. It makes every inspector perform like the best inspector on the team."
 
 ## Product Principles
 
 - Live beats post-mortem.
-- Assist the Jockey, do not replace the Jockey.
-- Use Cars24's schema; do not invent a fantasy inspection process.
+- Assist the inspector, do not replace the inspector.
+- Use the sample inspection schema; do not invent a fantasy inspection process.
 - Be honest about AI limits.
 - Make the demo deterministic where reliability matters.
-- Optimize for judge comprehension and business believability.
+- Optimize for reviewer comprehension and business believability.
 
 ## Technical Principles
 
@@ -275,17 +275,17 @@ Backend
 ### Mocked
 
 - Vehicle registration lookup.
-- Cars24 internal inspection API.
+- Production inspection API.
 - Pricing system integration.
 
-## 24-Hour Sprint Plan
+## Original Sprint Plan
 
 ### Sprint 1: Product Shell
 
 - Set up app.
 - Create vehicle lookup screen.
 - Add mock vehicle profiles.
-- Create inspection plan data from selected Cars24 fields.
+- Create inspection plan data from selected inspection fields.
 - Build basic stepper and submission state.
 
 ### Sprint 2: Camera And Evidence
@@ -306,7 +306,7 @@ Backend
 ### Sprint 4: Engine Check And Report
 
 - Add guided engine-sound check.
-- Structure engine answers into Cars24 fields.
+- Structure engine answers into inspection fields.
 - Add optional audio evidence recording and quality marker.
 - Generate external HTML/JSON report.
 
@@ -320,16 +320,16 @@ Backend
 
 ## Success Criteria
 
-The hack succeeds if:
+The project succeeds if:
 
 - The demo feels like a live copilot, not a static analyzer.
-- The app visibly uses Cars24 inspection-question fields.
+- The app visibly uses sample inspection fields.
 - The AI interrupts the flow with useful guidance.
 - The app auto-captures at least one photo after the AI says "good, hold still."
 - Voice input fills at least one structured field.
 - Guided engine-sound check is demonstrated.
-- External report clearly improves Cars24's pricing/audit workflow.
-- The build runs reliably in front of judges.
+- External report clearly improves pricing and audit workflows.
+- The build runs reliably in front of reviewers.
 
 ## Key Risks
 
@@ -355,7 +355,7 @@ Always say "guided inspection and evidence validation" before saying "diagnosis.
 
 ## Final Positioning
 
-Jockey Copilot is the real-time AI quality layer for Cars24 inspections.
+Inspection Copilot is the real-time AI quality layer for vehicle inspections.
 
 It turns a static checklist into an active field coach.
 

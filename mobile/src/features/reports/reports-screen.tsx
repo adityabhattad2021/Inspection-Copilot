@@ -101,7 +101,7 @@ export function ReportsScreen() {
       >
         <View style={{ gap: spacing.xs }}>
           <Text selectable style={typography.eyebrow}>
-            Jockey reports
+            Inspector reports
           </Text>
           <Text selectable style={[typography.title, { fontSize: 30 }]}>
             My Reports

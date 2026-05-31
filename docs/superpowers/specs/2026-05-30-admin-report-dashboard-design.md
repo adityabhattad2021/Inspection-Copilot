@@ -2,13 +2,13 @@
 
 ## Context
 
-Cars24 Jockey Copilot already generates report metadata and serves report JSON/HTML from FastAPI after an inspection is completed. The current report is useful but basic: it exposes completion, media quality, pricing risk, evidence, observations, interventions, and an audit trail without enough visual hierarchy or admin workflow polish.
+Inspection Copilot already generates report metadata and serves report JSON/HTML from FastAPI after an inspection is completed. The current report is useful but basic: it exposes completion, media quality, pricing risk, evidence, observations, interventions, and an audit trail without enough visual hierarchy or admin workflow polish.
 
 The next enhancement should make the generated report feel demo-ready for pricing and audit teams, and add a small admin-only dashboard where generated reports can be reviewed and downloaded.
 
 ## Goals
 
-- Make each generated report highly informative and visually impressive for the hackathon demo.
+- Make each generated report highly informative and visually impressive for the portfolio demo.
 - Add a lightweight React admin dashboard for listing generated reports.
 - Allow reports to be opened/downloaded from the dashboard as HTML or JSON.
 - Show clear report metadata badges, including low pricing risk, needs review, and evidence complete.
@@ -106,7 +106,7 @@ Replace the current plain document styling with a premium, dashboard-like report
 - Evidence completeness strip with expected versus accepted photo evidence.
 - Pricing review panel with concise notes.
 - Engine inspection panel showing knocking, rattling, vibration, exhaust status, and severity.
-- Checklist table grouped by Cars24 section.
+- Checklist table grouped by inspection section.
 - Evidence table with quality score and decision.
 - AI intervention timeline with timestamps, step names, messages, and confidence.
 - Audit trail section for traceability.
@@ -135,7 +135,7 @@ Use simple, responsive CSS embedded in the admin HTML. Cards should stay compact
 
 ## Security Design
 
-Admin access is intentionally lightweight for the hackathon:
+Admin access is intentionally lightweight for the demo:
 
 - Require `JOCKEY_COPILOT_ADMIN_TOKEN`.
 - Accept `Authorization: Bearer <token>` for API calls.

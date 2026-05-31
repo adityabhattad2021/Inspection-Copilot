@@ -6,7 +6,7 @@ DEV_API_BASE_URL ?= http://localhost:8000
 DEV_INSPECTION_FLOW_LOG ?= 0
 PROD_API_BASE_URL ?= http://65.0.101.246
 APK_PATH := android/app/build/outputs/apk/release/app-release.apk
-APK_DIST_PATH := dist/jockey-copilot-release.apk
+APK_DIST_PATH := dist/inspection-copilot-release.apk
 
 help:
 	@echo "Mobile commands:"

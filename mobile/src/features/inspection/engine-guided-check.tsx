@@ -54,7 +54,7 @@ const EMPTY_ENGINE_ANSWERS: EngineQnaAnswers = {
 };
 
 export const ENGINE_SCREEN_COPY = {
-  eyebrow: "Cars24 engine check",
+  eyebrow: "Engine check",
   reviewLabel: "Engine findings",
   subtitle: "Run the physical engine checks first. Record each answer after.",
   title: "Engine inspection",

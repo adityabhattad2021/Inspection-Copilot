@@ -106,7 +106,7 @@ def build_initial_realtime_messages(_instruction: str) -> list[dict[str, str]]:
             "content": (
                 "Give only a short opening greeting in the requested language. "
                 "Introduce yourself as Saarthi with an energetic inspection "
-                "navigator feel, tell the jockey you will call angles and "
+                "navigator feel, tell the inspector you will call angles and "
                 "evidence, and ask them to get ready. Localize naturally; do "
                 "not force English radio phrases if they sound strange. Do not "
                 "mention any inspection step, checklist field, camera angle, "

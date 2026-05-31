@@ -83,7 +83,7 @@ function ProfileLoadingState() {
     >
       <ActivityIndicator color={colors.camera} />
       <Text selectable style={[typography.small, { textAlign: "center" }]}>
-        Loading jockey profile
+        Loading inspector profile
       </Text>
     </View>
   );

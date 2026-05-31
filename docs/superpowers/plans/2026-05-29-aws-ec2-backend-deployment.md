@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deploy the Cars24 Jockey Copilot backend on AWS using EC2 for FastAPI, DynamoDB for inspection state, and S3 for images/audio/reports.
+**Goal:** Deploy the Inspection Copilot backend on AWS using EC2 for FastAPI, DynamoDB for inspection state, and S3 for images/audio/reports.
 
 **Architecture:** Run FastAPI on an Ubuntu EC2 instance behind Caddy or Nginx. The backend uses an EC2 IAM role to access DynamoDB and S3 without stored AWS access keys. Mobile talks to the backend over HTTPS; media uploads use S3 presigned URLs.
 
@@ -37,12 +37,12 @@ Use these values unless the user overrides them:
 ```bash
 export AWS_PROFILE=default
 export AWS_REGION=ap-south-1
-export APP_NAME=cars24-jockey
-export ENV_NAME=hack
-export KEY_NAME=cars24-jockey-hack-key
+export APP_NAME=inspection-copilot
+export ENV_NAME=portfolio
+export KEY_NAME=inspection-copilot-key
 export EC2_INSTANCE_TYPE=t3.small
-export DDB_TABLE=cars24-jockey-hack
-export S3_BUCKET=cars24-jockey-hack-evidence-$(aws sts get-caller-identity --query Account --output text)
+export DDB_TABLE=inspection-copilot
+export S3_BUCKET=inspection-copilot-evidence-$(aws sts get-caller-identity --query Account --output text)
 export SERVER_PORT=8000
 ```
 
@@ -280,7 +280,7 @@ Expected: parameter versions are printed.
 
 - [ ] **Step 1: Create trust policy file**
 
-Create local file `/tmp/cars24-ec2-trust-policy.json`:
+Create local file `/tmp/inspection-copilot-ec2-trust-policy.json`:
 
 ```json
 {
@@ -303,14 +303,14 @@ Create local file `/tmp/cars24-ec2-trust-policy.json`:
 aws iam create-role \
   --profile "$AWS_PROFILE" \
   --role-name "$APP_NAME-$ENV_NAME-ec2-role" \
-  --assume-role-policy-document file:///tmp/cars24-ec2-trust-policy.json
+  --assume-role-policy-document file:///tmp/inspection-copilot-ec2-trust-policy.json
 ```
 
 Expected: role ARN is printed.
 
 - [ ] **Step 3: Create least-privilege app policy**
 
-Create local file `/tmp/cars24-ec2-app-policy.json`:
+Create local file `/tmp/inspection-copilot-ec2-app-policy.json`:
 
 ```json
 {
@@ -326,7 +326,7 @@ Create local file `/tmp/cars24-ec2-app-policy.json`:
         "dynamodb:Query",
         "dynamodb:BatchWriteItem"
       ],
-      "Resource": "arn:aws:dynamodb:ap-south-1:ACCOUNT_ID:table/cars24-jockey-hack"
+      "Resource": "arn:aws:dynamodb:ap-south-1:ACCOUNT_ID:table/inspection-copilot"
     },
     {
       "Effect": "Allow",
@@ -343,7 +343,7 @@ Create local file `/tmp/cars24-ec2-app-policy.json`:
         "ssm:GetParameter",
         "ssm:GetParameters"
       ],
-      "Resource": "arn:aws:ssm:ap-south-1:ACCOUNT_ID:parameter/cars24-jockey/hack/*"
+      "Resource": "arn:aws:ssm:ap-south-1:ACCOUNT_ID:parameter/inspection-copilot/portfolio/*"
     }
   ]
 }
@@ -358,7 +358,7 @@ aws iam put-role-policy \
   --profile "$AWS_PROFILE" \
   --role-name "$APP_NAME-$ENV_NAME-ec2-role" \
   --policy-name "$APP_NAME-$ENV_NAME-app-policy" \
-  --policy-document file:///tmp/cars24-ec2-app-policy.json
+  --policy-document file:///tmp/inspection-copilot-ec2-app-policy.json
 ```
 
 Expected: command exits with status `0`.
@@ -402,7 +402,7 @@ export SG_ID=$(aws ec2 create-security-group \
   --profile "$AWS_PROFILE" \
   --region "$AWS_REGION" \
   --group-name "$APP_NAME-$ENV_NAME-backend-sg" \
-  --description "Cars24 Jockey backend public HTTPS and restricted SSH" \
+  --description " inspector backend public HTTPS and restricted SSH" \
   --vpc-id "$VPC_ID" \
   --query GroupId \
   --output text)
@@ -465,7 +465,7 @@ aws ec2 create-key-pair \
 chmod 400 "$KEY_NAME.pem"
 ```
 
-Expected: `cars24-jockey-hack-key.pem` exists locally.
+Expected: `inspection-copilot-key.pem` exists locally.
 
 - [ ] **Step 2: Find latest Ubuntu AMI**
 
@@ -966,7 +966,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 - [ ] **Step 2: Build locally**
 
 ```bash
-docker build -t cars24-jockey-backend:local backend
+docker build -t inspection-copilot-backend:local backend
 ```
 
 Expected: image builds.
@@ -974,7 +974,7 @@ Expected: image builds.
 - [ ] **Step 3: Run locally**
 
 ```bash
-docker run --rm -p 8000:8000 cars24-jockey-backend:local
+docker run --rm -p 8000:8000 inspection-copilot-backend:local
 ```
 
 Expected: backend starts.
@@ -1081,7 +1081,7 @@ Expected:
 - [ ] **Step 1: Create app directory**
 
 ```bash
-ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "mkdir -p ~/cars24-jockey"
+ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "mkdir -p ~/inspection-copilot"
 ```
 
 Expected: command exits with status `0`.
@@ -1094,7 +1094,7 @@ rsync -avz \
   --exclude '.git' \
   --exclude 'mobile/node_modules' \
   --exclude 'backend/.local' \
-  ./ ubuntu@"$EC2_PUBLIC_IP":~/cars24-jockey/
+  ./ ubuntu@"$EC2_PUBLIC_IP":~/inspection-copilot/
 ```
 
 Expected: files sync to EC2.
@@ -1107,7 +1107,7 @@ Expected: files sync to EC2.
 
 ```bash
 ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "
-  cd ~/cars24-jockey/deploy &&
+  cd ~/inspection-copilot/deploy &&
   cat > .env <<EOF
 AWS_REGION=$AWS_REGION
 JOCKEY_COPILOT_STORAGE_BACKEND=dynamodb
@@ -1129,7 +1129,7 @@ Expected: `deploy/.env` exists on EC2 and is not committed.
 
 ```bash
 ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "
-  cd ~/cars24-jockey/deploy &&
+  cd ~/inspection-copilot/deploy &&
   docker compose up -d --build
 "
 ```
@@ -1140,7 +1140,7 @@ Expected: Docker containers build and start.
 
 ```bash
 ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "
-  cd ~/cars24-jockey/deploy &&
+  cd ~/inspection-copilot/deploy &&
   docker compose ps
 "
 ```
@@ -1173,7 +1173,7 @@ Expected:
 
 ```bash
 ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "
-  cd ~/cars24-jockey/deploy &&
+  cd ~/inspection-copilot/deploy &&
   docker compose exec backend python -m app.seed seed
 "
 ```
@@ -1233,7 +1233,7 @@ Expected: response includes `sessionId` and inspection plan.
 ```bash
 curl -fsS "http://$EC2_PUBLIC_IP/sessions/$SESSION_ID/start" \
   -H "Content-Type: application/json" \
-  -d '{"jockeyName":"Demo Jockey","languageCode":"en-IN"}'
+  -d '{"jockeyName":"Demo inspector","languageCode":"en-IN"}'
 ```
 
 Expected: response includes active first step.
@@ -1361,7 +1361,7 @@ api.yourdomain.com {
 
 ```bash
 ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "
-  cd ~/cars24-jockey/deploy &&
+  cd ~/inspection-copilot/deploy &&
   docker compose restart caddy
 "
 ```
@@ -1426,7 +1426,7 @@ Deployment smoke checks passed for http://...
 
 ```bash
 ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "
-  cd ~/cars24-jockey/deploy &&
+  cd ~/inspection-copilot/deploy &&
   docker compose logs -f backend
 "
 ```
@@ -1435,7 +1435,7 @@ ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "
 
 ```bash
 ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "
-  cd ~/cars24-jockey/deploy &&
+  cd ~/inspection-copilot/deploy &&
   docker compose restart backend
 "
 ```
@@ -1448,10 +1448,10 @@ rsync -avz \
   --exclude '.git' \
   --exclude 'mobile/node_modules' \
   --exclude 'backend/.local' \
-  ./ ubuntu@"$EC2_PUBLIC_IP":~/cars24-jockey/
+  ./ ubuntu@"$EC2_PUBLIC_IP":~/inspection-copilot/
 
 ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "
-  cd ~/cars24-jockey/deploy &&
+  cd ~/inspection-copilot/deploy &&
   docker compose up -d --build
 "
 ```
@@ -1493,4 +1493,4 @@ Run this in two passes:
 1. **Code readiness pass:** Add DynamoDB/S3 support and regression tests locally.
 2. **AWS deployment pass:** Create AWS resources and deploy to EC2 using CLI.
 
-That keeps cloud debugging separate from backend correctness, which is much faster under hackathon pressure.
+That keeps cloud debugging separate from backend correctness, which is much faster under demo pressure.

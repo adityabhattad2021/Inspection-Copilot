@@ -1,4 +1,4 @@
-package com.cars24.jockeycopilot
+package com.inspectioncopilot.app
 
 import android.app.Application
 import android.content.res.Configuration

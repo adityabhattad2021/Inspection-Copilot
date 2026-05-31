@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 def test_database_uses_dynamodb_backend_when_configured(monkeypatch):
     monkeypatch.setenv("JOCKEY_COPILOT_STORAGE_BACKEND", "dynamodb")
-    monkeypatch.setenv("JOCKEY_COPILOT_DDB_TABLE", "cars24-jockey-hack")
+    monkeypatch.setenv("JOCKEY_COPILOT_DDB_TABLE", "inspection-copilot")
 
     import app.database as database
 
@@ -32,7 +32,7 @@ def test_uploads_presign_returns_s3_shape(monkeypatch):
     from app.main import app
     from app.routes import uploads
 
-    monkeypatch.setenv("JOCKEY_COPILOT_S3_BUCKET", "cars24-jockey-hack-evidence-test")
+    monkeypatch.setenv("JOCKEY_COPILOT_S3_BUCKET", "inspection-copilot-evidence-test")
     monkeypatch.setattr(
         uploads,
         "create_presigned_upload_url",

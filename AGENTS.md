@@ -51,7 +51,7 @@ Prefer Makefile commands over raw tool commands. Backend Make targets use `uv` i
 
 ## Verification
 
-Time is tight during this hackathon. Optimize for unblocking the user:
+Optimize for unblocking the user:
 
 - Do not run tests repeatedly after every small edit.
 - Do not run `git diff` again and again just to restate changes.

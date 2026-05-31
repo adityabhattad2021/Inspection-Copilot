@@ -360,7 +360,7 @@ def build_voice_tools() -> ToolsSchema:
         "type": "array",
     }
     transcript_property = {
-        "description": "Exact answer spoken by the jockey.",
+        "description": "Exact answer spoken by the inspector.",
         "type": "string",
     }
     step_property = {
@@ -368,7 +368,7 @@ def build_voice_tools() -> ToolsSchema:
         "type": "string",
     }
     yes_no_property = {
-        "description": "AI-interpreted yes/no answer from the jockey.",
+        "description": "AI-interpreted yes/no answer from the inspector.",
         "enum": ["yes", "no"],
         "type": "string",
     }
@@ -398,7 +398,7 @@ def build_voice_tools() -> ToolsSchema:
                 name="record_engine_observation",
                 description=(
                     "Save AI-interpreted spoken engine Q&A answers to the "
-                    "inspection after the jockey answers aloud."
+                    "inspection after the inspector answers aloud."
                 ),
                 properties={
                     "stepId": step_property,
@@ -407,14 +407,14 @@ def build_voice_tools() -> ToolsSchema:
                     "rattling": yes_no_property,
                     "idleVibration": {
                         "description": (
-                            "AI-interpreted idle vibration level from the jockey."
+                            "AI-interpreted idle vibration level from the inspector."
                         ),
                         "enum": ["none", "mild", "heavy"],
                         "type": "string",
                     },
                     "exhaustSound": {
                         "description": (
-                            "AI-interpreted exhaust sound category from the jockey."
+                            "AI-interpreted exhaust sound category from the inspector."
                         ),
                         "enum": ["normal", "noisy", "smoke"],
                         "type": "string",

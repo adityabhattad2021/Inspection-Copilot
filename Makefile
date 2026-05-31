@@ -8,7 +8,7 @@ BACKEND_HOST ?= 0.0.0.0
 BACKEND_URL ?= http://localhost:$(BACKEND_PORT)
 
 help:
-	@echo "Cars24 Jockey Copilot commands:"
+	@echo "Inspection Copilot commands:"
 	@echo "  make doctor            - quick backend + Android status"
 	@echo "  make backend-install   - install backend dependencies with uv"
 	@echo "  make backend-dev       - run FastAPI backend"

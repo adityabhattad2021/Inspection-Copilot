@@ -61,10 +61,10 @@ export function getInspectionStepChangedEvent(
       : "Expected parts: none.";
   const action =
     step.status === "needs_observation"
-      ? "Ask the jockey one short question for the field observation, then keep listening for the answer."
+      ? "Ask the inspector one short question for the field observation, then keep listening for the answer."
       : step.kind === "engine-guided"
-        ? "Guide the engine-sound check as instruction first, Q&A after. Give one physical check instruction, wait for the jockey to say ready or use the visible control, then ask only the next engine question. Do not ask all engine questions at once."
-        : "Tell the jockey what to do for this step in your own short field-inspection words.";
+        ? "Guide the engine-sound check as instruction first, Q&A after. Give one physical check instruction, wait for the inspector to say ready or use the visible control, then ask only the next engine question. Do not ask all engine questions at once."
+        : "Tell the inspector what to do for this step in your own short field-inspection words.";
 
   return [
     `STEP_CHANGED ${index + 1}: ${step.fieldName}.`,
@@ -84,9 +84,9 @@ export function getRealtimeCameraStepStartEvent(
 ) {
   return [
     getInspectionStepChangedEvent(step, index),
-    "The Android camera capture screen is open for the jockey; the preview may still be warming up.",
+    "The Android camera capture screen is open for the inspector; the preview may still be warming up.",
     "Do not judge the camera preview from STEP_CHANGED.",
-    "Ask the jockey to tap Capture when the requested view is framed.",
+    "Ask the inspector to tap Capture when the requested view is framed.",
     "Wait for CAPTURED_PHOTO_REVIEW before deciding whether to accept or retake.",
   ].join(" ");
 }

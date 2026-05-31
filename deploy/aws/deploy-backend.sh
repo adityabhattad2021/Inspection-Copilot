@@ -5,8 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 EC2_HOST="${EC2_HOST:-65.0.101.246}"
 EC2_USER="${EC2_USER:-ubuntu}"
-SSH_KEY="${SSH_KEY:-$HOME/.ssh/cars24-jockey-hack-key.pem}"
-REMOTE_DIR="${REMOTE_DIR:-/home/ubuntu/cars24-jockey}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/inspection-copilot-key.pem}"
+REMOTE_DIR="${REMOTE_DIR:-/home/ubuntu/inspection-copilot}"
 HEALTH_URL="${HEALTH_URL:-http://$EC2_HOST/health}"
 
 RUN_TESTS=1

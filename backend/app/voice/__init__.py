@@ -1,2 +1,1 @@
-"""Realtime voice helpers for the Cars24 Jockey Copilot."""
-
+"""Realtime voice helpers for Inspection Copilot."""

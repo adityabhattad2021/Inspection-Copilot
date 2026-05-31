@@ -1,26 +1,26 @@
 {
   "expo": {
-    "name": "Jockey Copilot",
-    "slug": "cars24-jockey-copilot",
+    "name": "Inspection Copilot",
+    "slug": "inspection-copilot",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "jockey-copilot",
+    "scheme": "inspection-copilot",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "bundleIdentifier": "com.cars24.jockeycopilot",
+      "bundleIdentifier": "com.inspectioncopilot.app",
       "supportsTablet": false,
       "infoPlist": {
-        "NSCameraUsageDescription": "Jockey Copilot uses the camera to guide vehicle inspection photos in real time.",
-        "NSMicrophoneUsageDescription": "Jockey Copilot uses the microphone for voice notes and guided engine-sound checks.",
+        "NSCameraUsageDescription": "Inspection Copilot uses the camera to guide vehicle inspection photos in real time.",
+        "NSMicrophoneUsageDescription": "Inspection Copilot uses the microphone for voice notes and guided engine-sound checks.",
         "UIBackgroundModes": [
           "voip"
         ]
       }
     },
     "android": {
-      "package": "com.cars24.jockeycopilot",
+      "package": "com.inspectioncopilot.app",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -71,7 +71,7 @@
       ]
     ],
     "extra": {
-      "productName": "Cars24 Jockey Copilot",
+      "productName": "Inspection Copilot",
       "demoVehicleRegistration": "KA03MX2147"
     },
     "experiments": {

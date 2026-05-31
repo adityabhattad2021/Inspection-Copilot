@@ -5,7 +5,7 @@ import type {
   VehicleProfile,
 } from "@/src/api/client";
 
-const REPORT_CACHE_KEY = "jockey-copilot.reports.v1";
+const REPORT_CACHE_KEY = "inspection-copilot.reports.v1";
 
 export type SavedInspectionReport = InspectionReportMetadata & {
   createdByName?: string;

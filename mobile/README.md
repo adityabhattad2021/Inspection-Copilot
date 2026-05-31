@@ -1,11 +1,11 @@
-# Cars24 Jockey Copilot Mobile App
+# Inspection Copilot Mobile App
 
-Expo React Native app for the Cars24 Jockey Copilot hackathon prototype. The app is an Android-first development build that walks a Car Jockey through onboarding, vehicle lookup, a 3D vehicle confirmation screen, realtime voice/camera inspection, structured door-damage observation, guided engine-sound capture, and final submission.
+Expo React Native app for the Inspection Copilot portfolio prototype. The app is an Android-first development build that walks a car inspector through onboarding, vehicle lookup, a 3D vehicle confirmation screen, realtime voice/camera inspection, structured door-damage observation, guided engine-sound capture, and final submission.
 
 ## Current App Flow
 
 1. `app/onboarding.tsx`
-   - Creates a jockey profile with name and instruction language.
+   - Creates an inspector profile with name and instruction language.
    - Supported languages are English, Hindi, Kannada, and Hinglish.
    - Saves the profile locally with AsyncStorage and verifies it through the backend on launch.
 
@@ -28,7 +28,7 @@ Expo React Native app for the Cars24 Jockey Copilot hackathon prototype. The app
 ## Main Mobile Surfaces
 
 - `src/api/client.ts` owns the typed backend client and separate dev/release backend URL handling.
-- `src/features/onboarding/*` owns jockey profile setup and persistence.
+- `src/features/onboarding/*` owns inspector profile setup and persistence.
 - `src/features/lookup/*` owns registration lookup, vehicle-found navigation, and 3D model display.
 - `src/features/inspection/inspection-screen.tsx` owns the live inspection workflow.
 - `src/features/inspection/pipecat-voice-boundary.ts` owns the Pipecat realtime voice boundary.
@@ -181,7 +181,7 @@ make mobile-build-android-apk
 This writes:
 
 ```text
-mobile/dist/jockey-copilot-release.apk
+mobile/dist/inspection-copilot-release.apk
 ```
 
 To build and install it on a connected Android phone:
@@ -196,7 +196,7 @@ The release APK points at the deployed backend. The current backend is HTTP, so 
 
 1. Start the backend and Android reverse mapping.
 2. Run the Android dev client.
-3. Create or reuse a jockey profile.
+3. Create or reuse an inspector profile.
 4. Look up `KA03MX2147`.
 5. Confirm the vehicle-found screen and start inspection.
 6. Follow realtime voice guidance for Front Main, Rear Main, Dashboard/Odometer, and Engine Sound.

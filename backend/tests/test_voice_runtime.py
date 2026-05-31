@@ -243,7 +243,7 @@ def test_realtime_instruction_includes_vehicle_step_language_and_guardrails():
         language_code="hi-IN",
     )
 
-    assert "Cars24 Jockey Copilot" in instruction
+    assert "Inspection Copilot" in instruction
     assert "Saarthi" in instruction
     assert "rally navigator" in instruction
     assert "Never speak setup or debug phrasing" in instruction
@@ -270,7 +270,7 @@ def test_realtime_instruction_includes_vehicle_step_language_and_guardrails():
 
 def test_realtime_bot_starts_with_immediate_greeting_turn():
     messages = build_initial_realtime_messages(
-        "You are Cars24 Jockey Copilot. Speak Hindi."
+        "You are Inspection Copilot. Speak Hindi."
     )
 
     assert len(messages) == 1
@@ -856,7 +856,7 @@ def test_voice_record_engine_observation_marks_session_ready_for_submission():
         },
         session_id=session_id,
         step_id="engine-sound",
-        transcript="Jockey reported no unusual sound, mild shake, normal exhaust.",
+        transcript="Inspector reported no unusual sound, mild shake, normal exhaust.",
     )
 
     assert result["type"] == "engine"

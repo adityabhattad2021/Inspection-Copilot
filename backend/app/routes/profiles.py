@@ -85,5 +85,5 @@ def list_profiles() -> ProfileListResponse:
 def get_profile(profile_id: str) -> ProfileResponse:
     payload = load_profile_payload(profile_id)
     if payload is None:
-        raise HTTPException(status_code=404, detail="Jockey profile not found")
+        raise HTTPException(status_code=404, detail="Inspector profile not found")
     return ProfileResponse.model_validate(payload)
