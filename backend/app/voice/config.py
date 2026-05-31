@@ -40,7 +40,7 @@ class VoiceRuntimeConfig:
 
 
 def load_voice_environment() -> None:
-    env_file = os.environ.get("JOCKEY_COPILOT_ENV_FILE")
+    env_file = os.environ.get("INSPECTION_COPILOT_ENV_FILE")
     load_dotenv(dotenv_path=env_file or DEFAULT_ENV_FILE, override=False)
 
 
@@ -84,20 +84,20 @@ def _normalize_ice_server(candidate: Any) -> dict[str, Any]:
 def get_voice_ice_servers() -> list[dict[str, Any]]:
     load_voice_environment()
 
-    configured = os.environ.get("JOCKEY_COPILOT_ICE_SERVERS_JSON")
+    configured = os.environ.get("INSPECTION_COPILOT_ICE_SERVERS_JSON")
     if not configured:
         return DEFAULT_VOICE_ICE_SERVERS
 
     parsed = json.loads(configured)
     if not isinstance(parsed, list):
-        raise ValueError("JOCKEY_COPILOT_ICE_SERVERS_JSON must be a JSON list")
+        raise ValueError("INSPECTION_COPILOT_ICE_SERVERS_JSON must be a JSON list")
     return [_normalize_ice_server(entry) for entry in parsed]
 
 
 def get_voice_runtime_config() -> VoiceRuntimeConfig:
     load_voice_environment()
 
-    base_url = os.environ.get("JOCKEY_COPILOT_VOICE_BASE_URL", DEFAULT_VOICE_BASE_URL)
+    base_url = os.environ.get("INSPECTION_COPILOT_VOICE_BASE_URL", DEFAULT_VOICE_BASE_URL)
     start_url = f"{base_url.rstrip('/')}/start"
     llm_provider = get_voice_llm_provider()
 

@@ -66,7 +66,7 @@ class CreateSessionRequest(BaseModel):
 class StartSessionRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    jockey_name: str | None = Field(default=None, alias="jockeyName")
+    inspector_name: str | None = Field(default=None, alias="inspectorName")
     language_code: str | None = Field(default=None, alias="languageCode")
 
 
@@ -198,7 +198,7 @@ def start_session(
     session = SessionResponse.model_validate(updated_payload)
     active_step = _active_step(session)
     vehicle = session.vehicle
-    name_prefix = f"{request.jockey_name}, " if request.jockey_name else ""
+    name_prefix = f"{request.inspector_name}, " if request.inspector_name else ""
     message = (
         f"{name_prefix}Saarthi is ready for the {vehicle.year} "
         f"{vehicle.make} {vehicle.model} inspection."

@@ -47,7 +47,7 @@ def _utc_now() -> str:
 def _evidence_root() -> Path:
     return Path(
         os.environ.get(
-            "JOCKEY_COPILOT_EVIDENCE_DIR",
+            "INSPECTION_COPILOT_EVIDENCE_DIR",
             str(BACKEND_ROOT / ".local" / "evidence"),
         )
     )

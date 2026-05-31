@@ -10,7 +10,7 @@ client = TestClient(app)
 
 def test_debug_inspection_flow_log_appends_ndjson_to_local_file(monkeypatch, tmp_path):
     log_path = tmp_path / "debug" / "inspection-flow.ndjson"
-    monkeypatch.setenv("JOCKEY_COPILOT_FLOW_LOG_PATH", str(log_path))
+    monkeypatch.setenv("INSPECTION_COPILOT_FLOW_LOG_PATH", str(log_path))
 
     response = client.post(
         "/debug/inspection-flow-log",
@@ -53,7 +53,7 @@ def test_debug_inspection_flow_log_appends_ndjson_to_local_file(monkeypatch, tmp
 
 def test_debug_inspection_flow_log_keeps_appending_events(monkeypatch, tmp_path):
     log_path = tmp_path / "inspection-flow.ndjson"
-    monkeypatch.setenv("JOCKEY_COPILOT_FLOW_LOG_PATH", str(log_path))
+    monkeypatch.setenv("INSPECTION_COPILOT_FLOW_LOG_PATH", str(log_path))
 
     first = client.post(
         "/debug/inspection-flow-log",
@@ -78,7 +78,7 @@ def test_debug_inspection_flow_log_keeps_appending_events(monkeypatch, tmp_path)
 
 def test_debug_inspection_flow_log_creates_one_file_per_session(monkeypatch, tmp_path):
     log_path = tmp_path / "inspection-flow.ndjson"
-    monkeypatch.setenv("JOCKEY_COPILOT_FLOW_LOG_PATH", str(log_path))
+    monkeypatch.setenv("INSPECTION_COPILOT_FLOW_LOG_PATH", str(log_path))
 
     first = client.post(
         "/debug/inspection-flow-log",

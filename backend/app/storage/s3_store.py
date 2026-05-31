@@ -8,9 +8,9 @@ DEFAULT_PRESIGN_EXPIRES_IN = 900
 
 
 def get_s3_bucket() -> str:
-    bucket = os.environ.get("JOCKEY_COPILOT_S3_BUCKET")
+    bucket = os.environ.get("INSPECTION_COPILOT_S3_BUCKET")
     if not bucket:
-        raise RuntimeError("JOCKEY_COPILOT_S3_BUCKET is required for S3 storage")
+        raise RuntimeError("INSPECTION_COPILOT_S3_BUCKET is required for S3 storage")
     return bucket
 
 

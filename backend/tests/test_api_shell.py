@@ -13,7 +13,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def isolated_sqlite_db(monkeypatch, tmp_path):
-    monkeypatch.setenv("JOCKEY_COPILOT_DB_PATH", str(tmp_path / "sessions.db"))
+    monkeypatch.setenv("INSPECTION_COPILOT_DB_PATH", str(tmp_path / "sessions.db"))
     clear_database()
     seed_database()
 
@@ -121,7 +121,7 @@ def test_create_session_persists_session_to_local_sqlite():
         json={"registrationNumber": "KA03MX2147"},
     )
     body = response.json()
-    db_path = os.environ["JOCKEY_COPILOT_DB_PATH"]
+    db_path = os.environ["INSPECTION_COPILOT_DB_PATH"]
 
     with sqlite3.connect(db_path) as connection:
         row = connection.execute(
@@ -142,7 +142,7 @@ def test_create_session_persists_snapshot_of_seeded_plan_steps():
         json={"registrationNumber": "KA03MX2147"},
     )
     body = response.json()
-    db_path = os.environ["JOCKEY_COPILOT_DB_PATH"]
+    db_path = os.environ["INSPECTION_COPILOT_DB_PATH"]
 
     with sqlite3.connect(db_path) as connection:
         rows = connection.execute(
@@ -183,7 +183,7 @@ def test_get_session_rejects_unknown_session_id():
     assert response.json()["detail"] == "Inspection session not found"
 
 
-def test_create_profile_persists_jockey_profile_to_local_sqlite():
+def test_create_profile_persists_inspector_profile_to_local_sqlite():
     response = client.post(
         "/profiles",
         json={"name": " Aditya ", "languageCode": "kn-IN"},
@@ -191,19 +191,19 @@ def test_create_profile_persists_jockey_profile_to_local_sqlite():
 
     assert response.status_code == 201
     body = response.json()
-    assert body["profileId"].startswith("jockey_")
+    assert body["profileId"].startswith("inspector_")
     assert body["name"] == "Aditya"
     assert body["languageCode"] == "kn-IN"
     assert body["languageLabel"] == "Kannada"
     assert body["createdAt"].endswith("Z")
     assert body["updatedAt"] == body["createdAt"]
 
-    db_path = os.environ["JOCKEY_COPILOT_DB_PATH"]
+    db_path = os.environ["INSPECTION_COPILOT_DB_PATH"]
     with sqlite3.connect(db_path) as connection:
         row = connection.execute(
             """
             SELECT profile_id, name, language_code, language_label
-            FROM jockey_profiles
+            FROM inspector_profiles
             WHERE profile_id = ?
             """,
             (body["profileId"],),
@@ -217,7 +217,7 @@ def test_create_profile_persists_jockey_profile_to_local_sqlite():
     )
 
 
-def test_get_profile_returns_existing_jockey_profile():
+def test_get_profile_returns_existing_inspector_profile():
     create_response = client.post(
         "/profiles",
         json={"name": "Ravi", "languageCode": "hi-IN"},
@@ -230,7 +230,7 @@ def test_get_profile_returns_existing_jockey_profile():
     assert get_response.json() == create_response.json()
 
 
-def test_list_profiles_returns_all_created_jockey_profiles():
+def test_list_profiles_returns_all_created_inspector_profiles():
     first_response = client.post(
         "/profiles",
         json={"name": "Ravi", "languageCode": "hi-IN"},
@@ -260,7 +260,7 @@ def test_create_profile_rejects_unsupported_language_code():
 
 
 def test_get_profile_rejects_unknown_profile_id():
-    response = client.get("/profiles/jockey_missing")
+    response = client.get("/profiles/inspector_missing")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Inspector profile not found"

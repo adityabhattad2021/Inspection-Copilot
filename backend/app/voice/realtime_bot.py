@@ -288,7 +288,7 @@ async def bot(runner_args: Any):
     body = _runner_body(runner_args)
     session_id = resolve_runner_session_id(runner_args)
     language_code = body.get("languageCode") or body.get("language_code")
-    jockey_name = body.get("jockeyName") or body.get("jockey_name")
+    inspector_name = body.get("inspectorName") or body.get("inspector_name")
     session_payload = load_session_payload(session_id)
     if session_payload is None:
         raise RuntimeError(f"Inspection session not found: {session_id}")
@@ -308,7 +308,7 @@ async def bot(runner_args: Any):
     tools = build_voice_tools()
     instruction = build_realtime_instruction(
         session=session_payload,
-        jockey_name=str(jockey_name) if jockey_name else None,
+        inspector_name=str(inspector_name) if inspector_name else None,
         language_code=str(language_code) if language_code else None,
     )
 

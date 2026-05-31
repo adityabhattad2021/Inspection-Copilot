@@ -23,7 +23,7 @@ def main() -> None:
         clear_database()
 
     seed_database()
-    backend = os.environ.get("JOCKEY_COPILOT_STORAGE_BACKEND", "sqlite")
+    backend = os.environ.get("INSPECTION_COPILOT_STORAGE_BACKEND", "sqlite")
     print(f"Seeded {backend} database at {get_database_path()}")
 
 

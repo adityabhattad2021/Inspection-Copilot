@@ -3,11 +3,11 @@ import sqlite3
 from pathlib import Path
 
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / ".local" / "jockey_copilot.sqlite3"
+DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / ".local" / "inspection_copilot.sqlite3"
 
 
 def get_database_path() -> Path:
-    configured_path = os.environ.get("JOCKEY_COPILOT_DB_PATH")
+    configured_path = os.environ.get("INSPECTION_COPILOT_DB_PATH")
     if configured_path:
         return Path(configured_path)
     return DEFAULT_DB_PATH

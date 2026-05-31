@@ -9,7 +9,7 @@ def save_profile_payload(payload: dict[str, Any]) -> None:
     with connect_database() as connection:
         connection.execute(
             """
-            INSERT OR REPLACE INTO jockey_profiles (
+            INSERT OR REPLACE INTO inspector_profiles (
                 profile_id,
                 name,
                 language_code,
@@ -42,7 +42,7 @@ def load_profile_payload(profile_id: str) -> dict[str, Any] | None:
                 language_label,
                 created_at,
                 updated_at
-            FROM jockey_profiles
+            FROM inspector_profiles
             WHERE profile_id = ?
             """,
             (profile_id,),
@@ -73,7 +73,7 @@ def list_profile_payloads() -> list[dict[str, Any]]:
                 language_label,
                 created_at,
                 updated_at
-            FROM jockey_profiles
+            FROM inspector_profiles
             ORDER BY created_at, rowid
             """
         ).fetchall()

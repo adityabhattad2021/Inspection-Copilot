@@ -15,8 +15,8 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def isolated_sqlite_db(monkeypatch, tmp_path):
-    monkeypatch.setenv("JOCKEY_COPILOT_DB_PATH", str(tmp_path / "inspection.db"))
-    monkeypatch.setenv("JOCKEY_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setenv("INSPECTION_COPILOT_DB_PATH", str(tmp_path / "inspection.db"))
+    monkeypatch.setenv("INSPECTION_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
     clear_database()
     seed_database()
 
@@ -49,7 +49,7 @@ def test_start_session_marks_first_step_active_and_returns_agent_greeting():
 
     response = client.post(
         f"/sessions/{session_id}/start",
-        json={"jockeyName": "Aditya", "languageCode": "hi-IN"},
+        json={"inspectorName": "Aditya", "languageCode": "hi-IN"},
     )
 
     assert response.status_code == 200
@@ -83,7 +83,7 @@ def test_live_frame_analysis_returns_guidance_and_records_intervention():
     assert body["confidence"] == 0.78
     assert "front-left tyre" in body["guidance"]
 
-    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+    with sqlite3.connect(os.environ["INSPECTION_COPILOT_DB_PATH"]) as connection:
         row = connection.execute(
             """
             SELECT step_id, type, message
@@ -142,7 +142,7 @@ def test_photo_evidence_accepts_step_and_advances_to_rear_main():
     assert body["session"]["plan"]["steps"][0]["status"] == "complete"
     assert body["session"]["plan"]["steps"][1]["status"] == "active"
 
-    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+    with sqlite3.connect(os.environ["INSPECTION_COPILOT_DB_PATH"]) as connection:
         row = connection.execute(
             """
             SELECT step_id, kind, local_uri, accepted
@@ -175,7 +175,7 @@ def test_photo_evidence_upload_stores_image_bytes_and_records_local_file():
     assert body["accepted"] is True
 
     evidence_path = (
-        Path(os.environ["JOCKEY_COPILOT_EVIDENCE_DIR"])
+        Path(os.environ["INSPECTION_COPILOT_EVIDENCE_DIR"])
         / "sessions"
         / session_id
         / "photos"
@@ -183,7 +183,7 @@ def test_photo_evidence_upload_stores_image_bytes_and_records_local_file():
     )
     assert evidence_path.read_bytes() == image_bytes
 
-    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+    with sqlite3.connect(os.environ["INSPECTION_COPILOT_DB_PATH"]) as connection:
         row = connection.execute(
             """
             SELECT object_key, local_uri, metadata_json
@@ -234,7 +234,7 @@ def test_structure_observation_rejects_photo_step_without_observation_prompt():
     assert response.status_code == 400
     assert response.json()["detail"] == "Step does not require a spoken observation"
 
-    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+    with sqlite3.connect(os.environ["INSPECTION_COPILOT_DB_PATH"]) as connection:
         row = connection.execute(
             """
             SELECT step_id
@@ -316,7 +316,7 @@ def test_engine_check_accepts_structured_qna_answers_and_records_observation():
         "rattling": False,
     }
 
-    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+    with sqlite3.connect(os.environ["INSPECTION_COPILOT_DB_PATH"]) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
             """

@@ -4,8 +4,8 @@ from fastapi.testclient import TestClient
 
 
 def test_database_uses_dynamodb_backend_when_configured(monkeypatch):
-    monkeypatch.setenv("JOCKEY_COPILOT_STORAGE_BACKEND", "dynamodb")
-    monkeypatch.setenv("JOCKEY_COPILOT_DDB_TABLE", "inspection-copilot")
+    monkeypatch.setenv("INSPECTION_COPILOT_STORAGE_BACKEND", "dynamodb")
+    monkeypatch.setenv("INSPECTION_COPILOT_DDB_TABLE", "inspection-copilot")
 
     import app.database as database
 
@@ -15,7 +15,7 @@ def test_database_uses_dynamodb_backend_when_configured(monkeypatch):
         assert database.get_vehicle.__module__ == "app.database.dynamodb_backend"
         assert database.save_session_payload.__module__ == "app.database.dynamodb_backend"
     finally:
-        monkeypatch.setenv("JOCKEY_COPILOT_STORAGE_BACKEND", "sqlite")
+        monkeypatch.setenv("INSPECTION_COPILOT_STORAGE_BACKEND", "sqlite")
         importlib.reload(database)
 
 
@@ -32,7 +32,7 @@ def test_uploads_presign_returns_s3_shape(monkeypatch):
     from app.main import app
     from app.routes import uploads
 
-    monkeypatch.setenv("JOCKEY_COPILOT_S3_BUCKET", "inspection-copilot-evidence-test")
+    monkeypatch.setenv("INSPECTION_COPILOT_S3_BUCKET", "inspection-copilot-evidence-test")
     monkeypatch.setattr(
         uploads,
         "create_presigned_upload_url",

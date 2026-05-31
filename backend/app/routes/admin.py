@@ -11,11 +11,11 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _admin_token() -> str:
-    token = os.environ.get("JOCKEY_COPILOT_ADMIN_TOKEN", "").strip()
+    token = os.environ.get("INSPECTION_COPILOT_ADMIN_TOKEN", "").strip()
     if not token:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="JOCKEY_COPILOT_ADMIN_TOKEN is not configured",
+            detail="INSPECTION_COPILOT_ADMIN_TOKEN is not configured",
         )
     return token
 

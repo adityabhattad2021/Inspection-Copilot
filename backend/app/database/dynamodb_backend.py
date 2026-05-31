@@ -14,9 +14,9 @@ def _utc_now() -> str:
 
 
 def _table_name() -> str:
-    table_name = os.environ.get("JOCKEY_COPILOT_DDB_TABLE")
+    table_name = os.environ.get("INSPECTION_COPILOT_DDB_TABLE")
     if not table_name:
-        raise RuntimeError("JOCKEY_COPILOT_DDB_TABLE is required for DynamoDB storage")
+        raise RuntimeError("INSPECTION_COPILOT_DDB_TABLE is required for DynamoDB storage")
     return table_name
 
 

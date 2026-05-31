@@ -1,6 +1,6 @@
 import os
 
-if os.environ.get("JOCKEY_COPILOT_STORAGE_BACKEND") == "dynamodb":
+if os.environ.get("INSPECTION_COPILOT_STORAGE_BACKEND") == "dynamodb":
     from app.database.dynamodb_backend import (
         activate_first_step,
         build_inspection_plan,

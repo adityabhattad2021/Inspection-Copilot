@@ -60,7 +60,7 @@ def _utc_now() -> str:
 def create_profile(request: CreateProfileRequest) -> ProfileResponse:
     now = _utc_now()
     profile = ProfileResponse(
-        profile_id=f"jockey_{uuid4().hex[:12]}",
+        profile_id=f"inspector_{uuid4().hex[:12]}",
         name=request.name.strip(),
         language_code=request.language_code,
         language_label=LANGUAGE_LABELS[request.language_code],

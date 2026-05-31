@@ -41,8 +41,8 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def isolated_sqlite_db(monkeypatch, tmp_path):
-    monkeypatch.setenv("JOCKEY_COPILOT_DB_PATH", str(tmp_path / "voice.db"))
-    monkeypatch.setenv("JOCKEY_COPILOT_ENV_FILE", str(tmp_path / "missing.env"))
+    monkeypatch.setenv("INSPECTION_COPILOT_DB_PATH", str(tmp_path / "voice.db"))
+    monkeypatch.setenv("INSPECTION_COPILOT_ENV_FILE", str(tmp_path / "missing.env"))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_REALTIME_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_REALTIME_VOICE", raising=False)
@@ -51,8 +51,8 @@ def isolated_sqlite_db(monkeypatch, tmp_path):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_MODEL", raising=False)
     monkeypatch.delenv("GOOGLE_VOICE_ID", raising=False)
-    monkeypatch.delenv("JOCKEY_COPILOT_VOICE_BASE_URL", raising=False)
-    monkeypatch.delenv("JOCKEY_COPILOT_ICE_SERVERS_JSON", raising=False)
+    monkeypatch.delenv("INSPECTION_COPILOT_VOICE_BASE_URL", raising=False)
+    monkeypatch.delenv("INSPECTION_COPILOT_ICE_SERVERS_JSON", raising=False)
     clear_database()
     seed_database()
 
@@ -67,7 +67,7 @@ def _create_started_session() -> str:
 
     start_response = client.post(
         f"/sessions/{session_id}/start",
-        json={"jockeyName": "Aditya", "languageCode": "hi-IN"},
+        json={"inspectorName": "Aditya", "languageCode": "hi-IN"},
     )
     assert start_response.status_code == 200
 
@@ -115,12 +115,12 @@ def test_voice_config_loads_gemini_key_from_backend_env_file(monkeypatch, tmp_pa
                 "GOOGLE_API_KEY=google-test-local",
                 "GOOGLE_MODEL=models/gemini-test-live",
                 "GOOGLE_VOICE_ID=Puck",
-                "JOCKEY_COPILOT_VOICE_BASE_URL=http://127.0.0.1:8787",
+                "INSPECTION_COPILOT_VOICE_BASE_URL=http://127.0.0.1:8787",
             ]
         ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("JOCKEY_COPILOT_ENV_FILE", str(env_file))
+    monkeypatch.setenv("INSPECTION_COPILOT_ENV_FILE", str(env_file))
 
     config = get_voice_runtime_config()
 
@@ -165,7 +165,7 @@ def test_voice_ice_servers_default_to_public_stun():
 
 def test_voice_ice_servers_can_be_configured_for_turn(monkeypatch):
     monkeypatch.setenv(
-        "JOCKEY_COPILOT_ICE_SERVERS_JSON",
+        "INSPECTION_COPILOT_ICE_SERVERS_JSON",
         json.dumps(
             [
                 "stun:stun.example.com:19302",
@@ -204,7 +204,7 @@ def test_voice_start_endpoint_runs_on_the_main_fastapi_app():
 
 def test_voice_start_endpoint_returns_configured_turn_ice(monkeypatch):
     monkeypatch.setenv(
-        "JOCKEY_COPILOT_ICE_SERVERS_JSON",
+        "INSPECTION_COPILOT_ICE_SERVERS_JSON",
         json.dumps(
             [
                 {
@@ -239,7 +239,7 @@ def test_realtime_instruction_includes_vehicle_step_language_and_guardrails():
 
     instruction = build_realtime_instruction(
         session=session,
-        jockey_name="Aditya",
+        inspector_name="Aditya",
         language_code="hi-IN",
     )
 
@@ -520,7 +520,7 @@ def test_record_frame_intervention_saves_adjust_decision():
         "captureCommand": None,
     }
 
-    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+    with sqlite3.connect(os.environ["INSPECTION_COPILOT_DB_PATH"]) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
             """
@@ -574,7 +574,7 @@ def test_record_frame_intervention_returns_capture_command_on_hold():
 
 
 def test_accept_photo_evidence_stores_pending_photo_and_advances_step(tmp_path, monkeypatch):
-    monkeypatch.setenv("JOCKEY_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setenv("INSPECTION_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
     session_id = _create_started_session()
 
     result = accept_photo_evidence(
@@ -604,7 +604,7 @@ def test_accept_photo_evidence_stores_pending_photo_and_advances_step(tmp_path, 
     evidence_path = tmp_path / "evidence" / "sessions" / session_id / "photos" / "front-main.jpg"
     assert evidence_path.read_bytes() == b"\xff\xd8accepted-photo\xff\xd9"
 
-    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+    with sqlite3.connect(os.environ["INSPECTION_COPILOT_DB_PATH"]) as connection:
         connection.row_factory = sqlite3.Row
         evidence = connection.execute(
             """
@@ -633,7 +633,7 @@ def test_accept_photo_evidence_stores_pending_photo_and_advances_step(tmp_path, 
 
 
 def test_voice_accept_photo_handler_uses_pending_photo_and_notifies_mobile(tmp_path, monkeypatch):
-    monkeypatch.setenv("JOCKEY_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setenv("INSPECTION_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
     session_id = _create_started_session()
     sent_voice_results = []
     sent_tool_results = []
@@ -828,7 +828,7 @@ def test_voice_transcript_turn_rejects_photo_step_without_observation_step():
     assert response.status_code == 400
     assert response.json()["detail"] == "Step does not require a spoken observation"
 
-    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+    with sqlite3.connect(os.environ["INSPECTION_COPILOT_DB_PATH"]) as connection:
         row = connection.execute(
             """
             SELECT step_id

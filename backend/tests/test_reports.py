@@ -13,8 +13,8 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def isolated_sqlite_db(monkeypatch, tmp_path):
-    monkeypatch.setenv("JOCKEY_COPILOT_DB_PATH", str(tmp_path / "inspection.db"))
-    monkeypatch.setenv("JOCKEY_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setenv("INSPECTION_COPILOT_DB_PATH", str(tmp_path / "inspection.db"))
+    monkeypatch.setenv("INSPECTION_COPILOT_EVIDENCE_DIR", str(tmp_path / "evidence"))
     clear_database()
     seed_database()
 
@@ -85,7 +85,7 @@ def test_complete_session_generates_report_links_and_persists_json():
     }
     assert body["report"]["reportId"].startswith("rpt_")
 
-    with sqlite3.connect(os.environ["JOCKEY_COPILOT_DB_PATH"]) as connection:
+    with sqlite3.connect(os.environ["INSPECTION_COPILOT_DB_PATH"]) as connection:
         row = connection.execute(
             """
             SELECT status, completion_score, media_quality_score, pricing_risk
@@ -251,7 +251,7 @@ def test_create_report_rejects_incomplete_session():
 
 
 def test_admin_reports_reject_missing_or_invalid_token(monkeypatch):
-    monkeypatch.setenv("JOCKEY_COPILOT_ADMIN_TOKEN", "demo-secret")
+    monkeypatch.setenv("INSPECTION_COPILOT_ADMIN_TOKEN", "demo-secret")
 
     missing_response = client.get("/admin/reports.json")
     invalid_response = client.get(
@@ -264,7 +264,7 @@ def test_admin_reports_reject_missing_or_invalid_token(monkeypatch):
 
 
 def test_admin_reports_list_generated_reports_with_badges(monkeypatch):
-    monkeypatch.setenv("JOCKEY_COPILOT_ADMIN_TOKEN", "demo-secret")
+    monkeypatch.setenv("INSPECTION_COPILOT_ADMIN_TOKEN", "demo-secret")
     session_id = _create_completed_session()
     client.post(f"/sessions/{session_id}/complete")
 
@@ -283,7 +283,7 @@ def test_admin_reports_list_generated_reports_with_badges(monkeypatch):
 
 
 def test_admin_reports_derives_badges_for_legacy_report_payloads(monkeypatch):
-    monkeypatch.setenv("JOCKEY_COPILOT_ADMIN_TOKEN", "demo-secret")
+    monkeypatch.setenv("INSPECTION_COPILOT_ADMIN_TOKEN", "demo-secret")
     session_id = _create_completed_session()
     save_report_payload(
         {
@@ -401,7 +401,7 @@ def test_legacy_report_html_uses_derived_insights_without_failing():
 
 
 def test_admin_dashboard_serves_react_shell_for_valid_token(monkeypatch):
-    monkeypatch.setenv("JOCKEY_COPILOT_ADMIN_TOKEN", "demo-secret")
+    monkeypatch.setenv("INSPECTION_COPILOT_ADMIN_TOKEN", "demo-secret")
 
     response = client.get("/admin/reports?token=demo-secret")
 

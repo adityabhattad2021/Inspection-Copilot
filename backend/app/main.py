@@ -6,7 +6,7 @@ from loguru import logger
 
 
 def configure_logging() -> None:
-    log_level = os.environ.get("JOCKEY_COPILOT_LOG_LEVEL", "INFO").upper()
+    log_level = os.environ.get("INSPECTION_COPILOT_LOG_LEVEL", "INFO").upper()
     logger.remove()
     logger.add(sys.stderr, level=log_level)
 

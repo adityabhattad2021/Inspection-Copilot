@@ -23,13 +23,13 @@ def _active_step(session: dict[str, Any]) -> dict[str, Any] | None:
 def build_realtime_instruction(
     *,
     session: dict[str, Any],
-    jockey_name: str | None,
+    inspector_name: str | None,
     language_code: str | None,
 ) -> str:
     vehicle = session["vehicle"]
     active_step = _active_step(session)
     language = LANGUAGE_LABELS.get(language_code or "en-IN", "English")
-    name = jockey_name or "Inspector"
+    name = inspector_name or "Inspector"
     vehicle_title = f"{vehicle['year']} {vehicle['make']} {vehicle['model']}"
     step_lines = [
         f"- {step['fieldName']} ({step['id']}): {step['instructions']}"

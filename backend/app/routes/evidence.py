@@ -61,7 +61,7 @@ def _next_step(session: SessionResponse, step_id: str | None) -> InspectionStep 
 def _evidence_root() -> Path:
     return Path(
         os.environ.get(
-            "JOCKEY_COPILOT_EVIDENCE_DIR",
+            "INSPECTION_COPILOT_EVIDENCE_DIR",
             str(BACKEND_ROOT / ".local" / "evidence"),
         )
     )
@@ -114,7 +114,7 @@ async def _store_uploaded_image(
         raise HTTPException(status_code=415, detail="Uploaded evidence must be an image")
 
     object_key = _photo_object_key(session_id, step_id)
-    configured_bucket = os.environ.get("JOCKEY_COPILOT_S3_BUCKET")
+    configured_bucket = os.environ.get("INSPECTION_COPILOT_S3_BUCKET")
     if configured_bucket:
         local_uri = upload_bytes(
             bucket=get_s3_bucket(),

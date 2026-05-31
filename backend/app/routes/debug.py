@@ -35,7 +35,7 @@ def _utc_now() -> str:
 
 
 def _get_flow_log_path() -> Path:
-    configured_path = os.environ.get("JOCKEY_COPILOT_FLOW_LOG_PATH")
+    configured_path = os.environ.get("INSPECTION_COPILOT_FLOW_LOG_PATH")
     if configured_path:
         return Path(configured_path)
     return DEFAULT_FLOW_LOG_PATH
