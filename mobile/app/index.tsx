@@ -5,7 +5,7 @@ import { Stack, router } from "expo-router";
 import { ApiError, getProfile } from "@/src/api/client";
 import { colors, spacing, typography } from "@/src/components/ui";
 import { VehicleLookupScreen } from "@/src/features/lookup/vehicle-lookup-screen";
-import type { SavedJockeyProfile } from "@/src/features/onboarding/profile";
+import type { SavedInspectorProfile } from "@/src/features/onboarding/profile";
 import {
   clearCachedProfile,
   getCachedProfile,
@@ -13,7 +13,7 @@ import {
 } from "@/src/features/onboarding/profile-storage";
 
 export default function Index() {
-  const [profile, setProfile] = useState<SavedJockeyProfile | null>(null);
+  const [profile, setProfile] = useState<SavedInspectorProfile | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -61,7 +61,7 @@ export default function Index() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       {profile ? (
-        <VehicleLookupScreen jockeyProfile={profile} />
+        <VehicleLookupScreen inspectorProfile={profile} />
       ) : (
         <ProfileLoadingState />
       )}

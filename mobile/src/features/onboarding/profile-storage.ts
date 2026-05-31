@@ -1,13 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
-  isSavedJockeyProfile,
-  type SavedJockeyProfile,
+  isSavedInspectorProfile,
+  type SavedInspectorProfile,
 } from "@/src/features/onboarding/profile";
 
 const PROFILE_CACHE_KEY = "inspection-copilot.profile.v1";
 
-export async function getCachedProfile(): Promise<SavedJockeyProfile | null> {
+export async function getCachedProfile(): Promise<SavedInspectorProfile | null> {
   const rawValue = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
   if (rawValue === null) {
     return null;
@@ -15,7 +15,7 @@ export async function getCachedProfile(): Promise<SavedJockeyProfile | null> {
 
   try {
     const parsedValue: unknown = JSON.parse(rawValue);
-    if (isSavedJockeyProfile(parsedValue)) {
+    if (isSavedInspectorProfile(parsedValue)) {
       return parsedValue;
     }
   } catch {
@@ -26,7 +26,7 @@ export async function getCachedProfile(): Promise<SavedJockeyProfile | null> {
   return null;
 }
 
-export async function saveCachedProfile(profile: SavedJockeyProfile) {
+export async function saveCachedProfile(profile: SavedInspectorProfile) {
   await AsyncStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
 }
 

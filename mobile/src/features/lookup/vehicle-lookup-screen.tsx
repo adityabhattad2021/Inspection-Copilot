@@ -21,10 +21,10 @@ import {
   formatRegistrationPlate,
   RegistrationPlateShell,
 } from "@/src/features/lookup/registration-plate";
-import type { JockeyProfile } from "@/src/features/onboarding/profile";
+import type { InspectorProfile } from "@/src/features/onboarding/profile";
 
 type VehicleLookupScreenProps = {
-  jockeyProfile: JockeyProfile;
+  inspectorProfile: InspectorProfile;
 };
 
 const DEMO_REGISTRATION_NUMBER = "KA03MX2147";
@@ -55,7 +55,7 @@ function toUserMessage(error: unknown) {
   return "Something went wrong. Please try again.";
 }
 
-export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps) {
+export function VehicleLookupScreen({ inspectorProfile }: VehicleLookupScreenProps) {
   const insets = useSafeAreaInsets();
   const [registrationNumber, setRegistrationNumber] = useState(
     DEMO_REGISTRATION_NUMBER,
@@ -150,7 +150,7 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
               },
             ]}
           >
-            {jockeyProfile.jockeyName}
+            {inspectorProfile.inspectorName}
           </Text>
         </View>
         <View
@@ -192,7 +192,7 @@ export function VehicleLookupScreen({ jockeyProfile }: VehicleLookupScreenProps)
               },
             ]}
           >
-            {jockeyProfile.languageLabel} voice
+            {inspectorProfile.languageLabel} voice
           </Text>
         </View>
       </View>

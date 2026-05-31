@@ -787,7 +787,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
       setIsGreetingActive(true);
 
       try {
-        const [jockeyProfile, voiceConfig] = await Promise.all([
+        const [inspectorProfile, voiceConfig] = await Promise.all([
           getCachedProfile().catch(() => null),
           getVoiceConfig(),
         ]);
@@ -795,7 +795,7 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
           event: "voice_config_loaded",
           payload: {
             isReady: voiceConfig.ready,
-            languageCode: jockeyProfile?.languageCode ?? null,
+            languageCode: inspectorProfile?.languageCode ?? null,
             missing: voiceConfig.missing,
             provider: voiceConfig.provider,
             transport: voiceConfig.transport,
@@ -813,12 +813,12 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
         }
 
         const startedSession = await startInspectionSession(sessionId, {
-          jockeyName: jockeyProfile?.jockeyName,
-          languageCode: jockeyProfile?.languageCode,
+          inspectorName: inspectorProfile?.inspectorName,
+          languageCode: inspectorProfile?.languageCode,
         });
         await voiceDriver.connect({
-          jockeyName: jockeyProfile?.jockeyName,
-          languageCode: jockeyProfile?.languageCode,
+          inspectorName: inspectorProfile?.inspectorName,
+          languageCode: inspectorProfile?.languageCode,
           sessionId,
           startUrl: voiceConfig.startUrl,
         });
@@ -1132,10 +1132,10 @@ export function InspectionScreen({ sessionId }: InspectionScreenProps) {
 
       try {
         const completed = await completeInspectionSession(sessionId);
-        const jockeyProfile = await getCachedProfile().catch(() => null);
+        const inspectorProfile = await getCachedProfile().catch(() => null);
         await saveInspectionReport({
-          createdByName: jockeyProfile?.jockeyName,
-          createdByProfileId: jockeyProfile?.profileId,
+          createdByName: inspectorProfile?.inspectorName,
+          createdByProfileId: inspectorProfile?.profileId,
           report: completed.report,
           vehicle: reportSession.vehicle,
         }).catch((error) => {

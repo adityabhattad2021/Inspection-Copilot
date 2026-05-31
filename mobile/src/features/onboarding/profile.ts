@@ -40,19 +40,19 @@ export type InstructionLanguage =
 export type InstructionLanguageCode = InstructionLanguage["code"];
 export type OnboardingStepId = (typeof ONBOARDING_STEPS)[number]["id"];
 
-export type JockeyProfile = {
-  jockeyName: string;
+export type InspectorProfile = {
+  inspectorName: string;
   languageCode: InstructionLanguageCode;
   languageLabel: string;
   voiceLabel: string;
 };
 
-export type SavedJockeyProfile = JockeyProfile & {
+export type SavedInspectorProfile = InspectorProfile & {
   profileId: string;
 };
 
-type CreateJockeyProfileInput = {
-  jockeyName: string;
+type CreateInspectorProfileInput = {
+  inspectorName: string;
   languageCode: InstructionLanguageCode;
 };
 
@@ -74,32 +74,32 @@ export function getInstructionLanguage(
   );
 }
 
-export function createJockeyProfile({
-  jockeyName,
+export function createInspectorProfile({
+  inspectorName,
   languageCode,
-}: CreateJockeyProfileInput): JockeyProfile {
+}: CreateInspectorProfileInput): InspectorProfile {
   const language = getInstructionLanguage(languageCode);
 
   return {
-    jockeyName: jockeyName.trim(),
+    inspectorName: inspectorName.trim(),
     languageCode: language.code,
     languageLabel: language.label,
     voiceLabel: language.voiceLabel,
   };
 }
 
-export function isSavedJockeyProfile(value: unknown): value is SavedJockeyProfile {
+export function isSavedInspectorProfile(value: unknown): value is SavedInspectorProfile {
   if (typeof value !== "object" || value === null) {
     return false;
   }
 
-  const candidate = value as Partial<SavedJockeyProfile>;
+  const candidate = value as Partial<SavedInspectorProfile>;
 
   return (
     typeof candidate.profileId === "string" &&
     candidate.profileId.length > 0 &&
-    typeof candidate.jockeyName === "string" &&
-    candidate.jockeyName.length > 0 &&
+    typeof candidate.inspectorName === "string" &&
+    candidate.inspectorName.length > 0 &&
     isInstructionLanguageCode(candidate.languageCode) &&
     typeof candidate.languageLabel === "string" &&
     candidate.languageLabel.length > 0 &&

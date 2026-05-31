@@ -2,7 +2,7 @@ import {
   getInstructionLanguage,
   isInstructionLanguageCode,
   type InstructionLanguageCode,
-  type SavedJockeyProfile,
+  type SavedInspectorProfile,
 } from "@/src/features/onboarding/profile";
 
 const LOCAL_API_BASE_URL = "http://localhost:8000";
@@ -240,7 +240,7 @@ async function requestFormJson<TResponse>(
   return response.json() as Promise<TResponse>;
 }
 
-function toSavedJockeyProfile(payload: ProfileResponse): SavedJockeyProfile {
+function toSavedInspectorProfile(payload: ProfileResponse): SavedInspectorProfile {
   if (!isInstructionLanguageCode(payload.languageCode)) {
     throw new ApiError(
       "Profile response used an unsupported instruction language",
@@ -253,7 +253,7 @@ function toSavedJockeyProfile(payload: ProfileResponse): SavedJockeyProfile {
 
   return {
     profileId: payload.profileId,
-    jockeyName: payload.name,
+    inspectorName: payload.name,
     languageCode: payload.languageCode,
     languageLabel: payload.languageLabel || language.label,
     voiceLabel: language.voiceLabel,
@@ -262,23 +262,23 @@ function toSavedJockeyProfile(payload: ProfileResponse): SavedJockeyProfile {
 
 export async function createProfile(
   request: CreateProfileRequest,
-): Promise<SavedJockeyProfile> {
+): Promise<SavedInspectorProfile> {
   const payload = await requestJson<ProfileResponse>("/profiles", {
     body: JSON.stringify(request),
     method: "POST",
   });
 
-  return toSavedJockeyProfile(payload);
+  return toSavedInspectorProfile(payload);
 }
 
 export async function getProfile(
   profileId: string,
-): Promise<SavedJockeyProfile> {
+): Promise<SavedInspectorProfile> {
   const payload = await requestJson<ProfileResponse>(
     `/profiles/${encodeURIComponent(profileId)}`,
   );
 
-  return toSavedJockeyProfile(payload);
+  return toSavedInspectorProfile(payload);
 }
 
 export async function lookupVehicle(
@@ -313,7 +313,7 @@ export async function getVoiceConfig(): Promise<VoiceRuntimeConfig> {
 
 export async function startInspectionSession(
   sessionId: string,
-  request: { jockeyName?: string; languageCode?: string } = {},
+  request: { inspectorName?: string; languageCode?: string } = {},
 ): Promise<StartInspectionSessionResponse> {
   return requestJson<StartInspectionSessionResponse>(
     `/sessions/${encodeURIComponent(sessionId)}/start`,

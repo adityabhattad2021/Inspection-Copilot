@@ -69,7 +69,7 @@ export type InspectionVoiceEvent =
 export type InspectionVoiceConnectRequest = {
   sessionId: string;
   startUrl: string;
-  jockeyName?: string;
+  inspectorName?: string;
   languageCode?: string;
 };
 
@@ -96,8 +96,8 @@ function buildStartRequestBody(request: InspectionVoiceConnectRequest) {
     sessionId: request.sessionId,
   };
 
-  if (request.jockeyName) {
-    body.jockeyName = request.jockeyName;
+  if (request.inspectorName) {
+    body.inspectorName = request.inspectorName;
   }
   if (request.languageCode) {
     body.languageCode = request.languageCode;

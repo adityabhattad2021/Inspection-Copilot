@@ -23,29 +23,29 @@ import {
 import {
   ONBOARDING_STEPS,
   SUPPORTED_INSTRUCTION_LANGUAGES,
-  createJockeyProfile,
+  createInspectorProfile,
   getInstructionLanguage,
   type InstructionLanguageCode,
-  type JockeyProfile,
+  type InspectorProfile,
   type OnboardingStepId,
 } from "@/src/features/onboarding/profile";
 
-type JockeyOnboardingScreenProps = {
+type InspectorOnboardingScreenProps = {
   errorMessage?: string | null;
   isSubmitting?: boolean;
-  onContinue: (profile: JockeyProfile) => void;
+  onContinue: (profile: InspectorProfile) => void;
 };
 
-export function JockeyOnboardingScreen({
+export function InspectorOnboardingScreen({
   errorMessage,
   isSubmitting = false,
   onContinue,
-}: JockeyOnboardingScreenProps) {
+}: InspectorOnboardingScreenProps) {
   const insets = useSafeAreaInsets();
   const buttonLift = useRef(new Animated.Value(0)).current;
   const contentLift = useRef(new Animated.Value(0)).current;
   const [stepId, setStepId] = useState<OnboardingStepId>("narrative");
-  const [jockeyName, setJockeyName] = useState("");
+  const [inspectorName, setInspectorName] = useState("");
   const [languageCode, setLanguageCode] =
     useState<InstructionLanguageCode>("en-IN");
 
@@ -56,7 +56,7 @@ export function JockeyOnboardingScreen({
   const currentStepIndex = ONBOARDING_STEPS.findIndex(
     (step) => step.id === stepId,
   );
-  const canContinue = stepId !== "name" || jockeyName.trim().length >= 2;
+  const canContinue = stepId !== "name" || inspectorName.trim().length >= 2;
 
   useEffect(() => {
     const keyboardShowEvent =
@@ -151,8 +151,8 @@ export function JockeyOnboardingScreen({
     }
 
     onContinue(
-      createJockeyProfile({
-        jockeyName,
+      createInspectorProfile({
+        inspectorName,
         languageCode,
       }),
     );
@@ -217,7 +217,7 @@ export function JockeyOnboardingScreen({
                 transform: [{ translateY: contentLift }],
               }}
             >
-              <NameStep jockeyName={jockeyName} onChangeName={setJockeyName} />
+              <NameStep inspectorName={inspectorName} onChangeName={setInspectorName} />
             </Animated.View>
 
             <Animated.View
@@ -380,11 +380,11 @@ function NarrativeStep() {
 }
 
 type NameStepProps = {
-  jockeyName: string;
+  inspectorName: string;
   onChangeName: (value: string) => void;
 };
 
-function NameStep({ jockeyName, onChangeName }: NameStepProps) {
+function NameStep({ inspectorName, onChangeName }: NameStepProps) {
   return (
     <View style={{ gap: spacing.lg }}>
       <View style={{ gap: spacing.sm }}>
@@ -426,7 +426,7 @@ function NameStep({ jockeyName, onChangeName }: NameStepProps) {
           paddingHorizontal: spacing.md,
           paddingVertical: spacing.sm,
         }}
-        value={jockeyName}
+        value={inspectorName}
       />
     </View>
   );

@@ -1,7 +1,7 @@
-import { JockeyOnboardingScreen } from "@/src/features/onboarding/jockey-onboarding-screen";
+import { InspectorOnboardingScreen } from "@/src/features/onboarding/inspector-onboarding-screen";
 import {
   ONBOARDING_STEPS,
-  createJockeyProfile,
+  createInspectorProfile,
   type OnboardingStepId,
   SUPPORTED_INSTRUCTION_LANGUAGES,
 } from "@/src/features/onboarding/profile";
@@ -12,8 +12,8 @@ const expectedStepOrder: readonly OnboardingStepId[] = [
   "name",
   "language",
 ];
-const demoProfile = createJockeyProfile({
-  jockeyName: "Aditya",
+const demoProfile = createInspectorProfile({
+  inspectorName: "Inspector Boi",
   languageCode: SUPPORTED_INSTRUCTION_LANGUAGES[0].code,
 });
 
@@ -24,8 +24,8 @@ if (ONBOARDING_STEPS.length !== expectedStepOrder.length) {
 export function OnboardingFlowContract() {
   return (
     <>
-      <JockeyOnboardingScreen onContinue={() => {}} />
-      <VehicleLookupScreen jockeyProfile={demoProfile} />
+      <InspectorOnboardingScreen onContinue={() => {}} />
+      <VehicleLookupScreen inspectorProfile={demoProfile} />
     </>
   );
 }
