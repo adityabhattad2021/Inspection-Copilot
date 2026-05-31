@@ -2,8 +2,8 @@
 
 ## Kenney Car Kit
 
-The launcher icon and splash-screen vehicle scene are generated from the
-bundled Kenney-style vehicle model files in `assets/models/`.
+The launcher icon, splash-screen vehicle scene, and lookup 3D preview are
+generated from the bundled Kenney-style vehicle model in `assets/models/`.
 
 Source pack: Kenney Car Kit  
 License: Creative Commons CC0  

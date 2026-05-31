@@ -59,18 +59,13 @@ export function vehicleModelAssetContract() {
   const sedan = getVehicleModelAsset(sedanVehicle);
   const thar = getVehicleModelAsset(tharVehicle);
 
-  if (
-    thar.variant !== "suv-red" ||
-    thar.paintName !== "Red" ||
-    thar.modelUri === suv.modelUri
-  ) {
-    throw new Error("Mahindra Thar demo vehicle should use a dedicated red SUV model.");
-  }
-
   return {
     evPaint: ev.paintName,
     evVariant: ev.variant,
-    hasDistinctSuvAndSedanAssets: suv.modelUri !== sedan.modelUri,
+    hasSingleSharedModelAsset:
+      suv.modelUri === ev.modelUri &&
+      suv.modelUri === sedan.modelUri &&
+      suv.modelUri === thar.modelUri,
     sedanPaint: sedan.paintName,
     sedanVariant: sedan.variant,
     tharPaint: thar.paintName,
