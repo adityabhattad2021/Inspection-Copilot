@@ -1,46 +1,52 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Text, View } from "react-native";
-import type { WebViewMessageEvent } from "react-native-webview";
-import { WebView } from "react-native-webview";
+import {
+  ModelViewerWebView,
+  type ModelViewerHtmlOptions,
+  type ModelSource,
+  type ModelViewerStatus,
+} from "react-native-model-viewer-webview";
 
 import { colors, spacing, typography } from "@/src/components/ui";
-import { getVehicleModelViewerHtml } from "@/src/features/lookup/vehicle-model-html";
+import { DEFAULT_VEHICLE_MODEL_ASSET } from "@/src/features/lookup/vehicle-model-assets";
 
 type VehicleModelViewerProps = {
   minHeight?: number;
+  modelSource?: ModelSource;
   modelUri?: string;
 };
 
+const VEHICLE_MODEL_HTML_OPTIONS = {
+  autoRotate: true,
+  autoRotateDelay: 0,
+  backgroundColor: "#ffffff",
+  cameraControls: true,
+  cameraOrbit: "35deg 66deg 6.2m",
+  disablePan: true,
+  exposure: 1.05,
+  interactionPrompt: "none",
+  maxCameraOrbit: "auto auto 9m",
+  minCameraOrbit: "auto auto 4m",
+  posterColor: "#ffffff",
+  rotationPerSecond: "26deg",
+  shadowIntensity: 0.35,
+} satisfies Omit<ModelViewerHtmlOptions, "modelUri">;
+
 export function VehicleModelViewer({
   minHeight = 280,
+  modelSource,
   modelUri,
 }: VehicleModelViewerProps) {
-  const viewerHtml = useMemo(
-    () => getVehicleModelViewerHtml(modelUri),
-    [modelUri],
-  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
 
-  function handleViewerMessage(event: WebViewMessageEvent) {
-    try {
-      const payload = JSON.parse(event.nativeEvent.data) as {
-        message?: string;
-        type?: string;
-      };
+  function handleModelLoaded() {
+    setModelLoaded(true);
+    setErrorMessage(null);
+  }
 
-      if (payload.type === "model-loaded") {
-        setModelLoaded(true);
-        setErrorMessage(null);
-        return;
-      }
-
-      if (payload.type?.endsWith("error")) {
-        setErrorMessage(payload.message ?? "3D model viewer failed.");
-      }
-    } catch {
-      setErrorMessage(event.nativeEvent.data);
-    }
+  function handleModelError(status: ModelViewerStatus) {
+    setErrorMessage(status.message ?? "3D model viewer failed.");
   }
 
   return (
@@ -53,28 +59,16 @@ export function VehicleModelViewer({
         width: "100%",
       }}
     >
-      <WebView
-        allowFileAccess
-        allowFileAccessFromFileURLs
-        allowUniversalAccessFromFileURLs
+      <ModelViewerWebView
         allowsFullscreenVideo={false}
-        androidLayerType="hardware"
-        bounces={false}
-        domStorageEnabled
-        javaScriptEnabled
-        mixedContentMode="always"
+        htmlOptions={VEHICLE_MODEL_HTML_OPTIONS}
+        modelSource={modelSource ?? modelUri ?? DEFAULT_VEHICLE_MODEL_ASSET.modelUri}
+        onModelError={handleModelError}
+        onModelLoaded={handleModelLoaded}
         onError={(event) => setErrorMessage(event.nativeEvent.description)}
         onHttpError={(event) =>
           setErrorMessage(`HTTP ${event.nativeEvent.statusCode}`)
         }
-        onMessage={handleViewerMessage}
-        originWhitelist={["*"]}
-        scrollEnabled={false}
-        setSupportMultipleWindows={false}
-        source={{
-          baseUrl: "https://localhost/",
-          html: viewerHtml,
-        }}
         style={{
           backgroundColor: colors.surface,
           flex: 1,
