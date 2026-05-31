@@ -75,7 +75,7 @@ If realtime voice/WebRTC is part of the demo, EC2 is preferred over Lambda becau
 - Create: `backend/app/storage/s3_store.py`
   - S3 object key helpers, presigned upload URLs, presigned report URLs, and report object writes.
 - Modify: `backend/app/database/__init__.py`
-  - Route existing database function imports to either SQLite or DynamoDB based on `JOCKEY_COPILOT_STORAGE_BACKEND`.
+  - Route existing database function imports to either SQLite or DynamoDB based on `INSPECTION_COPILOT_STORAGE_BACKEND`.
 - Modify: `backend/app/routes/evidence.py`
   - Stop writing uploaded images to `.local/evidence` in AWS mode. Prefer presigned uploads and store S3 keys.
 - Create or modify: `backend/app/routes/uploads.py`
@@ -621,11 +621,11 @@ class AppConfig:
 
 def get_app_config() -> AppConfig:
     return AppConfig(
-        storage_backend=os.environ.get("JOCKEY_COPILOT_STORAGE_BACKEND", "sqlite"),
+        storage_backend=os.environ.get("INSPECTION_COPILOT_STORAGE_BACKEND", "sqlite"),
         aws_region=os.environ.get("AWS_REGION", "ap-south-1"),
-        dynamodb_table=os.environ.get("JOCKEY_COPILOT_DDB_TABLE"),
-        s3_bucket=os.environ.get("JOCKEY_COPILOT_S3_BUCKET"),
-        public_base_url=os.environ.get("JOCKEY_COPILOT_PUBLIC_BASE_URL", "http://localhost:8000"),
+        dynamodb_table=os.environ.get("INSPECTION_COPILOT_DDB_TABLE"),
+        s3_bucket=os.environ.get("INSPECTION_COPILOT_S3_BUCKET"),
+        public_base_url=os.environ.get("INSPECTION_COPILOT_PUBLIC_BASE_URL", "http://localhost:8000"),
     )
 ```
 
@@ -717,7 +717,7 @@ save_structured_observation
 In `backend/app/database/__init__.py`, select DynamoDB implementations only when:
 
 ```text
-JOCKEY_COPILOT_STORAGE_BACKEND=dynamodb
+INSPECTION_COPILOT_STORAGE_BACKEND=dynamodb
 ```
 
 Default remains SQLite so local tests stay stable.
@@ -1008,10 +1008,10 @@ services:
     restart: unless-stopped
     environment:
       AWS_REGION: ${AWS_REGION}
-      JOCKEY_COPILOT_STORAGE_BACKEND: dynamodb
-      JOCKEY_COPILOT_DDB_TABLE: ${JOCKEY_COPILOT_DDB_TABLE}
-      JOCKEY_COPILOT_S3_BUCKET: ${JOCKEY_COPILOT_S3_BUCKET}
-      JOCKEY_COPILOT_PUBLIC_BASE_URL: ${JOCKEY_COPILOT_PUBLIC_BASE_URL}
+      INSPECTION_COPILOT_STORAGE_BACKEND: dynamodb
+      INSPECTION_COPILOT_DDB_TABLE: ${INSPECTION_COPILOT_DDB_TABLE}
+      INSPECTION_COPILOT_S3_BUCKET: ${INSPECTION_COPILOT_S3_BUCKET}
+      INSPECTION_COPILOT_PUBLIC_BASE_URL: ${INSPECTION_COPILOT_PUBLIC_BASE_URL}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
     expose:
       - "8000"
@@ -1110,10 +1110,10 @@ ssh -i "$KEY_NAME.pem" ubuntu@"$EC2_PUBLIC_IP" "
   cd ~/inspection-copilot/deploy &&
   cat > .env <<EOF
 AWS_REGION=$AWS_REGION
-JOCKEY_COPILOT_STORAGE_BACKEND=dynamodb
-JOCKEY_COPILOT_DDB_TABLE=$DDB_TABLE
-JOCKEY_COPILOT_S3_BUCKET=$S3_BUCKET
-JOCKEY_COPILOT_PUBLIC_BASE_URL=http://$EC2_PUBLIC_IP
+INSPECTION_COPILOT_STORAGE_BACKEND=dynamodb
+INSPECTION_COPILOT_DDB_TABLE=$DDB_TABLE
+INSPECTION_COPILOT_S3_BUCKET=$S3_BUCKET
+INSPECTION_COPILOT_PUBLIC_BASE_URL=http://$EC2_PUBLIC_IP
 OPENAI_API_KEY=\$(aws ssm get-parameter --region $AWS_REGION --name /$APP_NAME/$ENV_NAME/OPENAI_API_KEY --with-decryption --query Parameter.Value --output text)
 EOF
 "
@@ -1233,7 +1233,7 @@ Expected: response includes `sessionId` and inspection plan.
 ```bash
 curl -fsS "http://$EC2_PUBLIC_IP/sessions/$SESSION_ID/start" \
   -H "Content-Type: application/json" \
-  -d '{"jockeyName":"Demo inspector","languageCode":"en-IN"}'
+  -d '{"inspectorName":"Demo inspector","languageCode":"en-IN"}'
 ```
 
 Expected: response includes active first step.

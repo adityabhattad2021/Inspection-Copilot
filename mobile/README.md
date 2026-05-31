@@ -108,16 +108,16 @@ GOOGLE_VOICE_ID=Charon
 # OPENAI_REALTIME_MODEL=gpt-realtime-2
 # OPENAI_REALTIME_VOICE=alloy
 
-JOCKEY_COPILOT_VOICE_BASE_URL=http://localhost:8000
-JOCKEY_COPILOT_FLOW_LOG_PATH=backend/.local/inspection-flow.ndjson
-JOCKEY_COPILOT_EVIDENCE_DIR=backend/.local/evidence
+INSPECTION_COPILOT_VOICE_BASE_URL=http://localhost:8000
+INSPECTION_COPILOT_FLOW_LOG_PATH=backend/.local/inspection-flow.ndjson
+INSPECTION_COPILOT_EVIDENCE_DIR=backend/.local/evidence
 ```
 
 - Gemini Live is the default voice LLM provider. Set `VOICE_LLM_PROVIDER=openai` to roll back without changing mobile code.
 - `GOOGLE_API_KEY` or `GEMINI_API_KEY` is required for the Gemini realtime voice runtime to report ready.
-- `GOOGLE_MODEL`, `GOOGLE_VOICE_ID`, and `JOCKEY_COPILOT_VOICE_BASE_URL` customize `/voice/config`; OpenAI model and voice vars apply only when `VOICE_LLM_PROVIDER=openai`.
-- `JOCKEY_COPILOT_FLOW_LOG_PATH` controls where `/debug/inspection-flow-log` writes NDJSON.
-- `JOCKEY_COPILOT_EVIDENCE_DIR` controls where realtime uploaded photo evidence is stored.
+- `GOOGLE_MODEL`, `GOOGLE_VOICE_ID`, and `INSPECTION_COPILOT_VOICE_BASE_URL` customize `/voice/config`; OpenAI model and voice vars apply only when `VOICE_LLM_PROVIDER=openai`.
+- `INSPECTION_COPILOT_FLOW_LOG_PATH` controls where `/debug/inspection-flow-log` writes NDJSON.
+- `INSPECTION_COPILOT_EVIDENCE_DIR` controls where realtime uploaded photo evidence is stored.
 
 Do not commit real secrets.
 

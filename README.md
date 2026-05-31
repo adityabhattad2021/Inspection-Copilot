@@ -161,10 +161,10 @@ GOOGLE_VOICE_ID=Charon
 # OPENAI_REALTIME_MODEL=gpt-realtime-2
 # OPENAI_REALTIME_VOICE=alloy
 
-JOCKEY_COPILOT_VOICE_BASE_URL=http://localhost:8000
-JOCKEY_COPILOT_DB_PATH=backend/.local/jockey_copilot.sqlite3
-JOCKEY_COPILOT_EVIDENCE_DIR=backend/.local/evidence
-JOCKEY_COPILOT_FLOW_LOG_PATH=backend/.local/inspection-flow.ndjson
+INSPECTION_COPILOT_VOICE_BASE_URL=http://localhost:8000
+INSPECTION_COPILOT_DB_PATH=backend/.local/inspection_copilot.sqlite3
+INSPECTION_COPILOT_EVIDENCE_DIR=backend/.local/evidence
+INSPECTION_COPILOT_FLOW_LOG_PATH=backend/.local/inspection-flow.ndjson
 ```
 
 Mobile variables:
@@ -231,7 +231,7 @@ Current local endpoints include:
 Local runtime artifacts live under `backend/.local/` by default:
 
 ```text
-backend/.local/jockey_copilot.sqlite3
+backend/.local/inspection_copilot.sqlite3
 backend/.local/evidence/
 backend/.local/inspection-flow/
 ```

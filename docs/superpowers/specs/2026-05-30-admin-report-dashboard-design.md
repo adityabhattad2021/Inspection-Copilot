@@ -27,7 +27,7 @@ The next enhancement should make the generated report feel demo-ready for pricin
 
 Serve a small React dashboard directly from the FastAPI backend at `/admin/reports`. The page can load React from a CDN and call backend admin JSON endpoints. This avoids a new frontend build/deploy pipeline while still satisfying the need for a React admin surface.
 
-The admin routes should require `JOCKEY_COPILOT_ADMIN_TOKEN`. A request is authorized if the token is supplied either as a bearer token or as a query parameter for demo convenience. If the env var is missing, admin routes should fail closed with a clear server-side configuration error.
+The admin routes should require `INSPECTION_COPILOT_ADMIN_TOKEN`. A request is authorized if the token is supplied either as a bearer token or as a query parameter for demo convenience. If the env var is missing, admin routes should fail closed with a clear server-side configuration error.
 
 ## Backend API Design
 
@@ -137,7 +137,7 @@ Use simple, responsive CSS embedded in the admin HTML. Cards should stay compact
 
 Admin access is intentionally lightweight for the demo:
 
-- Require `JOCKEY_COPILOT_ADMIN_TOKEN`.
+- Require `INSPECTION_COPILOT_ADMIN_TOKEN`.
 - Accept `Authorization: Bearer <token>` for API calls.
 - Accept `?token=<token>` for opening the HTML dashboard during demos.
 - The dashboard should keep the token in memory and include it in API calls.

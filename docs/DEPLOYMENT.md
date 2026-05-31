@@ -66,7 +66,7 @@ EC2_HOST=1.2.3.4 make backend-deploy-fast
 - Local `.env` files are not synced to EC2.
 - The server keeps its private runtime config in `deploy/.env.aws` on EC2.
 - The backend uses local SQLite in development by default.
-- The deployed backend uses DynamoDB and S3 when `JOCKEY_COPILOT_STORAGE_BACKEND=dynamodb` is set in the EC2 env file.
+- The deployed backend uses DynamoDB and S3 when `INSPECTION_COPILOT_STORAGE_BACKEND=dynamodb` is set in the EC2 env file.
 - Docker dependency layers are cached unless `backend/pyproject.toml`, `backend/uv.lock`, the Dockerfile, or the Docker cache changes.
 - Backend code-only changes reuse the dependency layer because `backend/Dockerfile` copies `pyproject.toml` and `uv.lock` before copying `app/`.
 - The voice agent uses Small WebRTC. The EC2 security group must allow inbound UDP media traffic, `/start` returns ICE servers for client NAT traversal, and the EC2 container runs with host networking so dynamic WebRTC UDP sockets are reachable.

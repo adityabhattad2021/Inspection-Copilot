@@ -14,7 +14,7 @@ The backend demo deployment is an EC2-hosted FastAPI Docker service backed by Dy
 | Photo handoff | VisionCamera JPEG encoded as a Pipecat RTVI client message | The captured image enters the same realtime model session through the existing `inspection-control` image transfer path |
 | Backend hosting | FastAPI in Docker on EC2 | Simple deployed backend service, no Lambda/Mangum/API Gateway in the current deployment |
 | Persistence | DynamoDB backend adapter | EC2 service remains stateless; session, plan, evidence metadata, observations, interventions, profiles, and reports live in DynamoDB |
-| Media storage | S3 evidence bucket | Stores photo evidence when `JOCKEY_COPILOT_S3_BUCKET` is configured; presigned uploads are also available |
+| Media storage | S3 evidence bucket | Stores photo evidence when `INSPECTION_COPILOT_S3_BUCKET` is configured; presigned uploads are also available |
 | Voice runtime | Pipecat Small WebRTC backend bot | Keeps realtime LLM keys on the backend and streams voice through the backend-controlled runtime |
 | Voice LLM | Gemini Live by default, OpenAI Realtime rollback | Backend can switch providers through `VOICE_LLM_PROVIDER` without changing mobile code |
 | Vehicle data | Seeded demo vehicles | Stable demo path with the same interface a real RC/vehicle data provider could replace |
@@ -563,16 +563,16 @@ flowchart TD
 
 | Variable | Used by | Meaning |
 |---|---|---|
-| `JOCKEY_COPILOT_STORAGE_BACKEND=dynamodb` | `app.database.__init__` | Selects the deployed DynamoDB adapter |
-| `JOCKEY_COPILOT_DDB_TABLE` | `dynamodb_backend.py` | DynamoDB table name |
-| `JOCKEY_COPILOT_S3_BUCKET` | `storage/s3_store.py`, `routes/evidence.py`, `routes/uploads.py` | Evidence bucket name |
+| `INSPECTION_COPILOT_STORAGE_BACKEND=dynamodb` | `app.database.__init__` | Selects the deployed DynamoDB adapter |
+| `INSPECTION_COPILOT_DDB_TABLE` | `dynamodb_backend.py` | DynamoDB table name |
+| `INSPECTION_COPILOT_S3_BUCKET` | `storage/s3_store.py`, `routes/evidence.py`, `routes/uploads.py` | Evidence bucket name |
 | `AWS_REGION` | boto3 clients | DynamoDB/S3 region |
 | `VOICE_LLM_PROVIDER` | `voice/config.py` | `gemini` default or `openai` rollback |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Gemini Live runtime | Required for Gemini voice readiness |
 | `OPENAI_API_KEY` | OpenAI Realtime runtime | Required only when `VOICE_LLM_PROVIDER=openai` |
-| `JOCKEY_COPILOT_VOICE_BASE_URL` | mobile voice config | Base URL returned by `/voice/config` |
-| `JOCKEY_COPILOT_ICE_SERVERS_JSON` | Small WebRTC | Optional STUN/TURN override |
-| `JOCKEY_COPILOT_FLOW_LOG_PATH` | debug route | Dev-only local NDJSON flow log path |
+| `INSPECTION_COPILOT_VOICE_BASE_URL` | mobile voice config | Base URL returned by `/voice/config` |
+| `INSPECTION_COPILOT_ICE_SERVERS_JSON` | Small WebRTC | Optional STUN/TURN override |
+| `INSPECTION_COPILOT_FLOW_LOG_PATH` | debug route | Dev-only local NDJSON flow log path |
 
 ## Current Boundaries
 
