@@ -5,26 +5,6 @@ Inspection Copilot is a portfolio prototype for a live, voice-and-vision assiste
 
 The prototype is intentionally demo-first: local FastAPI backend, Expo React Native Android development build, deterministic demo vehicles and inspection plan, local SQLite state, local evidence files, and realtime voice routed through the backend so mobile never stores AI keys.
 
-## Preview
-<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 02 PM" src="https://github.com/user-attachments/assets/c227c532-e51e-45da-b1be-67cd5946e28a" />
-
-<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 03 PM" src="https://github.com/user-attachments/assets/727bcc55-e736-4d89-9039-6e4c34a11c4f" />
-
-<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 03 PM (1)" src="https://github.com/user-attachments/assets/d643001a-6136-470e-837c-5a09d675830e" />
-
-<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 04 PM" src="https://github.com/user-attachments/assets/57e89b0e-a84c-4d96-bedc-918a669aab24" />
-
-<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 04 PM (1)" src="https://github.com/user-attachments/assets/9bbdce4e-8b0f-4bd8-aea7-7b8ea010df47" />
-
-<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 05 PM (2)" src="https://github.com/user-attachments/assets/00a2c1f3-ee73-45b5-9600-2bb0172fc9e6" />
-
-<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 05 PM (3)" src="https://github.com/user-attachments/assets/e526c820-502b-4aa2-bf5d-18b66ff3e75e" />
-
-<img width="200" height="450" alt="WhatsApp Image 2026-05-29 at 5 25 06 PM" src="https://github.com/user-attachments/assets/ecc472c5-3568-4426-8577-5a04cb81289a" />
-
-
-
-
 
 
 ## What It Demonstrates
